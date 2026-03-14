@@ -1,123 +1,126 @@
-
-
-const fs   = require("fs");
+const fs = require("fs");
 const axios = require("axios");
 
 module.exports.config = {
-    name: "antiout",
-    eventType: ["log:subscribe", "log:unsubscribe"],
-    version: "2.0.0",
-    credits: "KIRA",
-    description: "ترحيب بالأعضاء الجدد بصورهم + إرجاع من يغادر مع رسائل بزخرفة KIRA"
+  name: "تحكم_الجروب",
+  eventType: ["log:subscribe", "log:unsubscribe"],
+  version: "5.0",
+  credits: "ChatGPT",
+  description: "ترحيب واضافة وطرد ورجوع تلقائي برسائل فخمة وصور"
 };
 
-const HEADER_WELCOME = "⌬ ━━ 𝗞𝗜𝗥𝗔 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 ━━ ⌬";
-const HEADER_LEAVE   = "⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗨𝗔𝗥𝗗 ━━ ⌬";
-const HEADER_KICK    = "⌬ ━━ 𝗞𝗜𝗥𝗔 𝗞𝗜𝗖𝗞 ━━ ⌬";
+module.exports.run = async ({ api, event, Users, Threads }) => {
+  const threadID = event.threadID;
+  const threadInfo = await api.getThreadInfo(threadID);
+  const groupName = threadInfo.threadName || "المجموعة";
 
-module.exports.run = async function ({ api, event, Users }) {
-    const { threadID, logMessageType, logMessageData, author } = event;
+  // ══════════ عند الإضافة ══════════
+  if (event.logMessageType === "log:subscribe") {
+    const addedIDs = event.logMessageData.addedParticipants;
 
-    const threadInfo = await api.getThreadInfo(threadID);
-    const groupName  = threadInfo.threadName || "المجموعة";
+    for (const user of addedIDs) {
+      const userID = user.userFbId;
+      const name = global.data.userName.get(userID) || (await Users.getNameUser(userID));
 
-    // ════════════════════════════════════════════════════════
-    // 🌟 انضمام عضو جديد
-    // ════════════════════════════════════════════════════════
-    if (logMessageType === "log:subscribe") {
-        const addedUsers = logMessageData.addedParticipants;
+      // صورة البروفايل الرسمية من فيسبوك
+      const avatarURL = `https://graph.facebook.com/${userID}/picture?width=800&height=800&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`;
+      const imgPath = __dirname + `/welcome_${userID}.png`;
 
-        for (const user of addedUsers) {
-            const userID = user.userFbId;
+      try {
+        const imgData = (await axios.get(avatarURL, { responseType: "arraybuffer" })).data;
+        fs.writeFileSync(imgPath, Buffer.from(imgData));
 
-            // تجاهل إذا البوت هو اللي انضاف
-            if (userID == api.getCurrentUserID()) continue;
+        api.sendMessage(
+          {
+            body:
+              `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 ━━ ⌬\n\n` +
+              `🌸 أهلاً ${name} 🌸\n` +
+              `✨ نوّرت ${groupName}\n` +
+              `📌 اقرأ القوانين واستمتع 🔥`,
+            attachment: fs.createReadStream(imgPath)
+          },
+          threadID,
+          () => { try { fs.unlinkSync(imgPath); } catch (_) {} }
+        );
+      } catch (e) {
+        // fallback بدون صورة
+        api.sendMessage(
+          `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 ━━ ⌬\n\n🌸 أهلاً ${name}\n✨ نوّرت ${groupName} 🔥`,
+          threadID
+        );
+      }
+    }
+    return;
+  }
 
-            const name = global.data.userName.get(userID) || (await Users.getNameUser(userID));
-            const avatarURL = `https://graph.facebook.com/${userID}/picture?width=720&height=720`;
-            const imgPath   = __dirname + `/welcome_${userID}.png`;
+  // ══════════ عند المغادرة ══════════
+  if (event.logMessageType === "log:unsubscribe") {
+    const leftUser = event.logMessageData.leftParticipantFbId;
+    const name = global.data.userName.get(leftUser) || (await Users.getNameUser(leftUser));
 
-            try {
-                const imgData = (await axios.get(avatarURL, { responseType: "arraybuffer" })).data;
-                fs.writeFileSync(imgPath, Buffer.from(imgData));
+    // صورة البروفايل
+    const avatarURL = `https://graph.facebook.com/${leftUser}/picture?width=800&height=800&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`;
+    const avatarPath = __dirname + `/left_${leftUser}.png`;
 
-                await api.sendMessage(
-                    {
-                        body:
-                            `${HEADER_WELCOME}\n\n` +
-                            `🌸 أهلاً وسهلاً يا ${name} 🌸\n` +
-                            `✨ نوّرت جروب ${groupName}\n\n` +
-                            `📌 اقرأ قوانين المجموعة واستمتع بوجودك 🔥`,
-                        attachment: fs.createReadStream(imgPath)
-                    },
-                    threadID,
-                    () => { try { fs.unlinkSync(imgPath); } catch (_) {} }
-                );
-            } catch (_) {
-                // إذا فشل تحميل الصورة → رسالة بدون صورة
-                await api.sendMessage(
-                    `${HEADER_WELCOME}\n\n` +
-                    `🌸 أهلاً وسهلاً يا ${name} 🌸\n` +
-                    `✨ نوّرت جروب ${groupName} 🔥`,
-                    threadID
-                );
-            }
+    try {
+      const imgData = (await axios.get(avatarURL, { responseType: "arraybuffer" })).data;
+      fs.writeFileSync(avatarPath, Buffer.from(imgData));
+    } catch (_) {}
+
+    // طلع لوحده → نرجّعه
+    if (event.author == leftUser) {
+      api.addUserToGroup(leftUser, threadID, async (err) => {
+        if (err) {
+          return api.sendMessage(
+            `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗨𝗔𝗥𝗗 ━━ ⌬\n\n🚪 ${name} فرّ كالجبان 😂`,
+            threadID
+          );
         }
-        return;
+        const msgs = [
+          `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗨𝗔𝗥𝗗 ━━ ⌬\n\n😂 وين تروح يا ${name}؟\n🔒 ما في مفر من هنا!`,
+          `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗨𝗔𝗥𝗗 ━━ ⌬\n\n🤣 ${name} فكّر يهرب!\nلا تهرب مرة ثانية يا ضيّع`,
+          `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗨𝗔𝗥𝗗 ━━ ⌬\n\n😏 ${name} جان يطق\nرجّعناك قسراً 🔗`
+        ];
+        api.sendMessage(msgs[Math.floor(Math.random() * msgs.length)], threadID);
+      });
+
+      try { fs.unlinkSync(avatarPath); } catch (_) {}
+      return;
     }
 
-    // ════════════════════════════════════════════════════════
-    // 🚪 مغادرة عضو
-    // ════════════════════════════════════════════════════════
-    if (logMessageType === "log:unsubscribe") {
-        const leftID = logMessageData.leftParticipantFbId;
+    // تم طرده → صورة GIF من giphy
+    const kickGif = "https://media.giphy.com/media/KRxcgvd5fLiWk/giphy.gif";
+    const gifPath = __dirname + `/kick_${leftUser}.gif`;
 
-        // تجاهل إذا البوت هو اللي غادر
-        if (leftID == api.getCurrentUserID()) return;
+    const kickMsgs = [
+      `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗞𝗜𝗖𝗞 ━━ ⌬\n\n🗑️ تم التخلص من ${name}\nكان زي البعوضة بالضبط 🦟`,
+      `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗞𝗜𝗖𝗞 ━━ ⌬\n\n😂 باي باي ${name}!\nما راح يفوتنا شي 🚮`,
+      `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗞𝗜𝗖𝗞 ━━ ⌬\n\n🦶 ${name} اتطرد\nالجروب صار أنظف 🧹`,
+      `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗞𝗜𝗖𝗞 ━━ ⌬\n\n💀 ${name} مات رسمياً\nعزاءنا لعيلته 😂`,
+      `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗞𝗜𝗖𝗞 ━━ ⌬\n\n🤣 ${name} ودّعناه\nما كان يستاهل الهواء اللي يشمه`
+    ];
+    const kickMsg = kickMsgs[Math.floor(Math.random() * kickMsgs.length)];
 
-        const name = global.data.userName.get(leftID) || (await Users.getNameUser(leftID));
+    try {
+      const gifData = (await axios.get(kickGif, { responseType: "arraybuffer" })).data;
+      fs.writeFileSync(gifPath, Buffer.from(gifData));
 
-        // طلع بنفسه → نرجّعه
-        if (author == leftID) {
-            api.addUserToGroup(leftID, threadID, (err) => {
-                if (err) {
-                    return api.sendMessage(
-                        `${HEADER_LEAVE}\n\n🚪 ${name} غادر ولم نتمكن من إرجاعه`,
-                        threadID
-                    );
-                }
-                api.sendMessage(
-                    `${HEADER_LEAVE}\n\n😘 تعال يا ${name}!\n💬 لا تهرب مرة ثانية يا قلبي 🔥`,
-                    threadID
-                );
-            });
+      // نرسل صورة البروفايل + GIF
+      const attachments = [];
+      if (fs.existsSync(avatarPath)) attachments.push(fs.createReadStream(avatarPath));
+      attachments.push(fs.createReadStream(gifPath));
+
+      api.sendMessage(
+        { body: kickMsg, attachment: attachments },
+        threadID,
+        () => {
+          try { fs.unlinkSync(gifPath); } catch (_) {}
+          try { fs.unlinkSync(avatarPath); } catch (_) {}
         }
-        // تم طرده من قِبل شخص آخر
-        else {
-            const gifURL  = "https://i.ibb.co/7NRn0Tcn/d98f24daea4c.gif";
-            const imgPath = __dirname + `/kick_${leftID}.gif`;
-
-            try {
-                const imgData = (await axios.get(gifURL, { responseType: "arraybuffer" })).data;
-                fs.writeFileSync(imgPath, Buffer.from(imgData));
-
-                await api.sendMessage(
-                    {
-                        body:
-                            `${HEADER_KICK}\n\n` +
-                            `🚫 تم طرد ${name} بنجاح 😂🔥\n` +
-                            `🐶 لا أحب نباح الكلاب!`,
-                        attachment: fs.createReadStream(imgPath)
-                    },
-                    threadID,
-                    () => { try { fs.unlinkSync(imgPath); } catch (_) {} }
-                );
-            } catch (_) {
-                await api.sendMessage(
-                    `${HEADER_KICK}\n\n🚫 تم طرد ${name} بنجاح 😂🔥`,
-                    threadID
-                );
-            }
-        }
+      );
+    } catch (_) {
+      api.sendMessage(kickMsg, threadID);
+      try { fs.unlinkSync(avatarPath); } catch (_) {}
     }
+  }
 };
