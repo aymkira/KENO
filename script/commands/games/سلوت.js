@@ -2,8 +2,8 @@ module.exports.config = {
     name: "سلوت",
     version: "2.0.0",
     hasPermssion: 0,
-    credits: "عمر",
-    description: "لعبة سلوت — الحد الأدنى للرهان 10,000$",
+    credits: "أيمن",
+    description: "لعبة سلوت — الحد الأدنى 10,000$",
     commandCategory: "games",
     usages: "سلوت [مبلغ]",
     cooldowns: 5
@@ -12,51 +12,34 @@ module.exports.config = {
 module.exports.run = async function ({ api, event, args, Currencies }) {
     const { threadID, messageID, senderID } = event;
     const H = "⌬ ━━━━━━━━━━━━ ⌬";
-
-    const slotItems = ["🚀","⏳","👓","🔦","💡","🕯️","🥽","🎲","🔥","🔔","🏺","🌙","🐣"];
     const minBet = 10000;
+    const slots = ["🚀", "⏳", "👓", "🔦", "💡", "🕯️", "🥽", "🎲", "🔥", "🔔", "🏺", "🌙", "🐣"];
 
-    const data = await Currencies.getData(senderID);
-    const money = data.money;
-    const coin = parseInt(args[0]);
+    const money = (await Currencies.getData(senderID)).money;
+    const bet = parseInt(args[0]);
 
-    if (!args[0] || isNaN(coin) || coin < 0)
-        return api.sendMessage(
-            `${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n❌ أدخل مبلغاً صحيحاً للرهان!\n\n⪼ الاستخدام: مراهنة2 [مبلغ]\n⪼ الحد الأدنى: ${minBet.toLocaleString()}$\n\n${H}`,
-            threadID, messageID
-        );
+    if (!args[0] || isNaN(bet) || bet < 0)
+        return api.sendMessage(`${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n❌ أدخل مبلغاً صحيحاً!\n\n⪼ الاستخدام: مراهنة2 [مبلغ]\n⪼ الحد الأدنى: ${minBet.toLocaleString()}$\n\n${H}`, threadID, messageID);
 
-    if (coin < minBet)
-        return api.sendMessage(
-            `${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n⚠️ المبلغ أقل من الحد المسموح!\n\n⪼ رهانك: ${coin.toLocaleString()}$\n⪼ الحد الأدنى: ${minBet.toLocaleString()}$\n\n${H}`,
-            threadID, messageID
-        );
+    if (bet < minBet)
+        return api.sendMessage(`${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n⚠️ الحد الأدنى: ${minBet.toLocaleString()}$\n\n⪼ رهانك: ${bet.toLocaleString()}$\n\n${H}`, threadID, messageID);
 
-    if (coin > money)
-        return api.sendMessage(
-            `${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n💸 رصيدك ما يكفي!\n\n⪼ رصيدك الحالي: ${money.toLocaleString()}$\n⪼ الرهان المطلوب: ${coin.toLocaleString()}$\n\n${H}`,
-            threadID, messageID
-        );
+    if (bet > money)
+        return api.sendMessage(`${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n💸 رصيدك ما يكفي!\n\n⪼ رصيدك: ${money.toLocaleString()}$\n⪼ الرهان: ${bet.toLocaleString()}$\n\n${H}`, threadID, messageID);
 
-    const n = [0,1,2].map(() => Math.floor(Math.random() * slotItems.length));
-    const line = `${slotItems[n[0]]} ⌬ ${slotItems[n[1]]} ⌬ ${slotItems[n[2]]}`;
-
+    const n = [0, 1, 2].map(() => Math.floor(Math.random() * slots.length));
+    const line = `${slots[n[0]]} ⌬ ${slots[n[1]]} ⌬ ${slots[n[2]]}`;
     const allSame = n[0] === n[1] && n[1] === n[2];
-    const twoSame = n[0]===n[1] || n[0]===n[2] || n[1]===n[2];
-    const win = allSame || twoSame;
-    const reward = allSame ? coin * 8 : coin;
+    const twoSame = n[0] === n[1] || n[0] === n[2] || n[1] === n[2];
 
-    if (win) {
-        await Currencies.increaseMoney(senderID, reward);
-        return api.sendMessage(
-            `${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n${line}\n\n✅ فزت! تهانينا 🎉\n\n⪼ الرهان: ${coin.toLocaleString()}$\n⪼ الربح: +${reward.toLocaleString()}$\n⪼ رصيدك الجديد: ${(money + reward).toLocaleString()}$\n\n${H}`,
-            threadID, messageID
-        );
+    if (allSame) {
+        await Currencies.increaseMoney(senderID, bet * 8);
+        return api.sendMessage(`${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n${line}\n\n🎉 جاكبوت! فزت بـ 8 أضعاف!\n\n⪼ الربح: +${(bet * 8).toLocaleString()}$\n⪼ رصيدك: ${(money + bet * 8).toLocaleString()}$\n\n${H}`, threadID, messageID);
+    } else if (twoSame) {
+        await Currencies.increaseMoney(senderID, bet);
+        return api.sendMessage(`${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n${line}\n\n✅ فزت بضعف الرهان!\n\n⪼ الربح: +${bet.toLocaleString()}$\n⪼ رصيدك: ${(money + bet).toLocaleString()}$\n\n${H}`, threadID, messageID);
     } else {
-        await Currencies.decreaseMoney(senderID, coin);
-        return api.sendMessage(
-            `${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n${line}\n\n❌ خسرت! حظاً أوفر 😔\n\n⪼ الرهان: ${coin.toLocaleString()}$\n⪼ الخسارة: -${coin.toLocaleString()}$\n⪼ رصيدك الجديد: ${(money - coin).toLocaleString()}$\n\n${H}`,
-            threadID, messageID
-        );
+        await Currencies.decreaseMoney(senderID, bet);
+        return api.sendMessage(`${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n${line}\n\n❌ خسرت!\n\n⪼ الخسارة: -${bet.toLocaleString()}$\n⪼ رصيدك: ${(money - bet).toLocaleString()}$\n\n${H}`, threadID, messageID);
     }
 };
