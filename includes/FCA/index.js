@@ -2,7 +2,7 @@
 
 const utils = require("./utils");
 const log = require("npmlog");
-const logger = require('../../tools/logger/log.js');
+const logger = require('../../utils/log.js');
 
 
 log.info = (ci, bi) => {
