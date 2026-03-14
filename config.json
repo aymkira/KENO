@@ -32,7 +32,13 @@
     "OWNER": "aldwin",
     "AGE": "N/A",
     "GENDER": "male",
-    "FACEBOOK": "",
+    "SOCIAL": {
+  "devName": "أيمن",
+  "facebook": "https://www.facebook.com/profile.php?id=61580139921634",
+  "instagram": "https://instagram.com/x_v_k1",
+  "telegram": "https://t.me/X2_FD",
+  "tiktok": "#"
+}
     "rankupmode": "gifcanvas",
     "BanTemplate": "disable",
     "AutoOffBot": "disable",
