@@ -1,2 +1,1 @@
-# KENO
-Lus
+# Somi-bot
