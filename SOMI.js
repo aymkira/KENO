@@ -159,10 +159,20 @@ loginApiData.setOptions(global.config.FCAOption)
         global.config.version = '1.2.14'
         global.client.timeStart = new Date().getTime(),
             function () {
-              const listCommand = readdirSync(global.client.mainPath + '/script/commands').filter(command => command.endsWith('.js') && !command.includes('example') && !global.config.commandDisabled.includes(command));
-              for (const command of listCommand) {
-                try {
-                  var module = require(global.client.mainPath + '/script/commands/' + command);
+              const getAllFiles = (dir) => {
+  const entries = readdirSync(dir, { withFileTypes: true });
+  return entries.flatMap(entry => {
+    const fullPath = join(dir, entry.name);
+    return entry.isDirectory() ? getAllFiles(fullPath) : fullPath;
+  });
+};
+
+const commandsDir = global.client.mainPath + '/script/commands';
+const listCommand = getAllFiles(commandsDir)
+  .filter(command => command.endsWith('.js') && !command.includes('example') && !global.config.commandDisabled.some(d => command.includes(d)));
+
+for (const command of listCommand) {
+  var module = require(command); // ← المسار الكامل مباشرة
                   if (!module.config || !module.run || !module.config.commandCategory) throw new Error("Error in cmd format");
                   if (global.client.commands.has(module.config.name || '')) throw new Error("Name Is Repeated");
 
