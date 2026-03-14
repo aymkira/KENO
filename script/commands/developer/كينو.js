@@ -576,7 +576,7 @@ async function callGroq(systemPrompt, userMessage) {
       temperature: 0.15
     },
     {
-      headers: { "Authorization": `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${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}`, "Content-Type": "application/json" },
       timeout: 30000
     }
   );
