@@ -92,6 +92,6 @@
     "tesseract.js": "^5.1.1",
     "wasmoon": "^1.16.0",
     "ws3-fca": "^1.0.4",
-    "canvas": "^2.11.2"
+    "canvas": "npm:@napi-rs/canvas@^0.1.57"
   }
 }
