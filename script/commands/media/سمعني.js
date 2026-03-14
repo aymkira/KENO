@@ -4,7 +4,7 @@ const path = require("path");
 
 module.exports.config = {
   name: "سمعني",
-  version: "2.0.0",
+  version: "2.1.0",
   hasPermssion: 0,
   credits: "Yamada | D R X | ايمن",
   description: "البحث عن أغنية وتحميلها كاملة مع غلافها",
@@ -28,8 +28,11 @@ module.exports.run = async function ({ api, event, args }) {
   api.setMessageReaction("🔎", messageID, () => {}, true);
 
   try {
-    // ── 1. بحث يوتيوب للرابط والمدة ──────────────────────────
-    const videoInfo = await searchYouTube(query);
+    const [videoInfo, deezerInfo] = await Promise.all([
+      searchYouTube(query),
+      searchDeezer(query)
+    ]);
+
     if (!videoInfo) {
       api.setMessageReaction("❌", messageID, () => {}, true);
       return api.sendMessage(
@@ -50,16 +53,12 @@ module.exports.run = async function ({ api, event, args }) {
       }
     }
 
-    // ── 2. بحث ديزر لجلب الغلاف والمعلومات ──────────────────
-    const deezerInfo = await searchDeezer(query);
-
-    api.sendMessage(
-      `${HEADER}\n\n⏳ جاري التحميل: ${videoInfo.title}\n⏱️ المدة: ${videoInfo.timestamp || "غير محدد"}\n⌛ قد يستغرق هذا دقيقة...`,
-      threadID, messageID
-    );
     api.setMessageReaction("⬇️", messageID, () => {}, true);
 
-    // ── 3. تحميل الأغنية كاملة ───────────────────────────────
+    const coverPromise = (deezerInfo && deezerInfo.coverUrl)
+      ? downloadCover(deezerInfo.coverUrl)
+      : Promise.resolve(null);
+
     const downloadData = await getDownloadUrl(videoInfo.url);
 
     const sizeCheck = await checkFileSize(downloadData.url);
@@ -71,57 +70,46 @@ module.exports.run = async function ({ api, event, args }) {
       );
     }
 
-    const filePath = await downloadFile(downloadData.url);
+    const [filePath, coverPath] = await Promise.all([
+      downloadFile(downloadData.url),
+      coverPromise
+    ]);
+
     const fileSize = fs.statSync(filePath).size;
     const sizeInMB = (fileSize / (1024 * 1024)).toFixed(2);
 
-    // ── 4. تحميل الغلاف من ديزر إن وُجد ─────────────────────
-    let coverPath = null;
-    if (deezerInfo && deezerInfo.coverUrl) {
-      coverPath = await downloadCover(deezerInfo.coverUrl);
-    }
-
-    // ── 5. بناء الرسالة النهائية ──────────────────────────────
     const artist = deezerInfo ? deezerInfo.artist : null;
     const title  = deezerInfo ? deezerInfo.title  : videoInfo.title;
 
     const bodyText =
       `${HEADER}\n\n` +
-      `✅ تم التحميل 🎧\n` +
-      `🎵 الأغنية: ${title}\n` +
-      (artist ? `🎤 الفنان: ${artist}\n` : "") +
-      `📦 الحجم: ${sizeInMB} MB`;
+      `🎵 ${title}\n` +
+      (artist ? `🎤 ${artist}\n` : "") +
+      `⏱️ ${videoInfo.timestamp || "غير محدد"} · 📦 ${sizeInMB} MB`;
 
-    // إرسال الغلاف + النص أولاً ثم الصوت، أو الكل معاً إن لم يوجد غلاف
     if (coverPath) {
-      api.sendMessage(
-        { body: bodyText, attachment: fs.createReadStream(coverPath) },
-        threadID,
-        (err) => {
-          setTimeout(() => fs.unlink(coverPath).catch(() => {}), 10000);
-          api.sendMessage(
-            { body: `🎶 ${title}`, attachment: fs.createReadStream(filePath) },
-            threadID,
-            (err2) => {
-              if (!err2) api.setMessageReaction("✅", messageID, () => {}, true);
-              setTimeout(() => fs.unlink(filePath).catch(() => {}), 10000);
-            },
-            messageID
-          );
-        },
-        messageID
-      );
-    } else {
-      api.sendMessage(
-        { body: bodyText, attachment: fs.createReadStream(filePath) },
-        threadID,
-        (err) => {
-          if (!err) api.setMessageReaction("✅", messageID, () => {}, true);
-          setTimeout(() => fs.unlink(filePath).catch(() => {}), 10000);
-        },
-        messageID
-      );
+      await new Promise((res) => {
+        api.sendMessage(
+          { body: bodyText, attachment: fs.createReadStream(coverPath) },
+          threadID,
+          () => {
+            setTimeout(() => fs.unlink(coverPath).catch(() => {}), 10000);
+            res();
+          },
+          messageID
+        );
+      });
     }
+
+    api.sendMessage(
+      { body: `🎶 ${title}`, attachment: fs.createReadStream(filePath) },
+      threadID,
+      (err) => {
+        if (!err) api.setMessageReaction("✅", messageID, () => {}, true);
+        setTimeout(() => fs.unlink(filePath).catch(() => {}), 10000);
+      },
+      messageID
+    );
 
   } catch (err) {
     console.error(err);
@@ -132,10 +120,6 @@ module.exports.run = async function ({ api, event, args }) {
     );
   }
 };
-
-// ════════════════════════════════════════════
-//  دوال مساعدة
-// ════════════════════════════════════════════
 
 async function searchYouTube(query) {
   try {
@@ -170,39 +154,33 @@ async function getDownloadUrl(url) {
   const encoded = encodeURIComponent(url);
   const options = { headers: { "User-Agent": "Mozilla/5.0" } };
 
-  try {
-    const res = await axios.get(
-      `https://p.savenow.to/ajax/download.php?button=1&start=1&end=1&format=mp3&iframe_source=https://www.y2down.app,&url=${encoded}`,
-      { ...options, timeout: 20000 }
-    );
+  const res = await axios.get(
+    `https://p.savenow.to/ajax/download.php?button=1&start=1&end=1&format=mp3&iframe_source=https://www.y2down.app,&url=${encoded}`,
+    { ...options, timeout: 20000 }
+  );
 
-    const data = res.data;
-    if (!data.progress_url) throw new Error("فشل في بدء التحويل.");
-    if (data.duration && data.duration > 480)
-      throw new Error("الفيديو طويل جداً (أكثر من 8 دقائق).");
+  const data = res.data;
+  if (!data.progress_url) throw new Error("فشل في بدء التحويل.");
+  if (data.duration && data.duration > 480)
+    throw new Error("الفيديو طويل جداً (أكثر من 8 دقائق).");
 
-    let attempts = 0;
-    while (attempts < 60) {
-      await new Promise(r => setTimeout(r, 2000));
-      attempts++;
-      try {
-        const progressRes = await axios.get(data.progress_url, {
-          ...options, timeout: 8000
-        });
-        const progressData = progressRes.data;
-        if (progressData.success === 1 && progressData.download_url) {
-          return {
-            url:      progressData.download_url,
-            title:    data.title || "Audio Track",
-            duration: data.duration
-          };
-        }
-      } catch (e) {}
-    }
-    throw new Error("السيرفر بطيء جداً، انتهت مهلة التحويل.");
-  } catch (err) {
-    throw new Error(err.message || "فشل التحميل");
+  let attempts = 0;
+  while (attempts < 60) {
+    await new Promise(r => setTimeout(r, 2000));
+    attempts++;
+    try {
+      const progressRes = await axios.get(data.progress_url, { ...options, timeout: 8000 });
+      const progressData = progressRes.data;
+      if (progressData.success === 1 && progressData.download_url) {
+        return {
+          url:      progressData.download_url,
+          title:    data.title || "Audio Track",
+          duration: data.duration
+        };
+      }
+    } catch (e) {}
   }
+  throw new Error("السيرفر بطيء جداً، انتهت مهلة التحويل.");
 }
 
 async function checkFileSize(url) {
@@ -226,7 +204,6 @@ async function downloadFile(url) {
   const cacheDir = path.join(__dirname, "cache");
   fs.ensureDirSync(cacheDir);
   const filePath = path.join(cacheDir, `music_${Date.now()}.mp3`);
-
   const MAX_SIZE = 25 * 1024 * 1024;
   let downloadedSize = 0;
 
