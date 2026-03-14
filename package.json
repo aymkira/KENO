@@ -32,8 +32,7 @@
     "chalk": "^4.1.2",
     "cheerio": "^1.0.0",
     "chess.js": "^1.4.0",
-    "discord-image-generation": "^1.4.25",
-    "discord.js": "^14.16.3",
+    
     "dropbox-v2-api": "^2.4.53",
     "emoji-unicode": "^2.0.1",
     "eval": "",
