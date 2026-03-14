@@ -1,6 +1,7 @@
 const { createCanvas } = require("@napi-rs/canvas");
 const fs = require("fs-extra");
 const path = require("path");
+const { getUserData, addMoney, removeMoney, ensureUser } = require(path.join(process.cwd(), "includes", "mongodb.js"));
 
 module.exports.config = {
   name: "سلوتس",
@@ -341,17 +342,10 @@ module.exports.run = async function ({ api, event }) {
   if (isNaN(bet) || bet < 10)
     return api.sendMessage("🎰 طريقة الاستخدام:\nسلوتس [رهان]\n\nمثال: سلوتس 200\n\nأدنى رهان: 10 $", threadID, messageID);
 
-  // جلب الرصيد
-  let money = 0;
-  try {
-    if (global.db?.allUserData) {
-      const dbUser = global.db.allUserData.find(u => u.userID === senderID);
-      if (dbUser) {
-        const d = dbUser.data || {};
-        money = d.money ?? d.coin ?? d.coins ?? 0;
-      }
-    }
-  } catch (_) {}
+  // ── جلب الرصيد من MongoDB ──
+  await ensureUser(senderID);
+  const userData = await getUserData(senderID);
+  const money = userData?.currency?.money ?? 0;
 
   if (money < bet)
     return api.sendMessage(`❌ رصيدك غير كافٍ!\nرصيدك: ${money.toLocaleString()} $`, threadID, messageID);
@@ -365,22 +359,14 @@ module.exports.run = async function ({ api, event }) {
   // احسب الربح
   let totalProfit = -bet;
   wins.forEach(w => { totalProfit += bet * w.mult; });
-
   const finalMoney = money + totalProfit;
 
-  // تحديث الرصيد
-  try {
-    if (global.db?.allUserData) {
-      const dbUser = global.db.allUserData.find(u => u.userID === senderID);
-      if (dbUser) {
-        dbUser.data = dbUser.data || {};
-        if (dbUser.data.money !== undefined) dbUser.data.money = finalMoney;
-        else if (dbUser.data.coin !== undefined) dbUser.data.coin = finalMoney;
-        else if (dbUser.data.coins !== undefined) dbUser.data.coins = finalMoney;
-        else dbUser.data.money = finalMoney;
-      }
-    }
-  } catch (_) {}
+  // ── تحديث الرصيد في MongoDB ──
+  if (totalProfit > 0) {
+    await addMoney(senderID, totalProfit);
+  } else if (totalProfit < 0) {
+    await removeMoney(senderID, Math.abs(totalProfit));
+  }
 
   const img = drawSlots(grid, bet, wins, finalMoney, totalProfit);
 
