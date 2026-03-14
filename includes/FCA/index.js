@@ -2,21 +2,14 @@
 
 const utils = require("./utils");
 const log = require("npmlog");
+// ✅ تعديل: مسار logger يناسب بنية KENO
 const logger = require('../../utils/log.js');
 
 
+// ✅ تعديل: متوافق مع logger في KENO
 log.info = (ci, bi) => {
 	if (ci === "login") {
-		logger([
-			{
-			message: "※ LOGIN ▷ ",
-			 color: [...config.THEME.main],
-			},
-			{
-			message: bi,
-			color: [...config.THEME.text],
-			},
-		  ]);
+		logger(`※ LOGIN ▷ ${bi}`, "[ FCA ]");
 	}
 }
 
