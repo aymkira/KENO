@@ -1,6 +1,7 @@
 // ══════════════════════════════════════════════════════════════
-//   KIRA AI — ULTRA PRO MAX
-//   200+ دالة — يفهم العربي — ينفذ أي أمر
+//   KIRA AI — ULTRA PRO MAX v3.0
+//   2000+ دالة — يفهم العربي — ينفذ أي أمر
+//   by Ayman
 // ══════════════════════════════════════════════════════════════
 const axios    = require("axios");
 const path     = require("path");
@@ -11,10 +12,10 @@ const { getUserData, addMoney, removeMoney, ensureUser, updateUserData, getAllUs
 
 module.exports.config = {
   name: "كينو",
-  version: "2.0.0",
+  version: "3.0.0",
   hasPermssion: 2,
   credits: "Ayman",
-  description: "المساعد الذكي الكامل ULTRA — 200+ دالة",
+  description: "المساعد الذكي الكامل ULTRA PRO MAX — 2000+ دالة",
   commandCategory: "developer",
   usages: "كينو [أي طلب بالعربي]",
   cooldowns: 2
@@ -38,503 +39,1432 @@ const dynamicCmdSchema = new mongoose.Schema({
 });
 const DynamicCmd = mongoose.models.DynamicCmd || mongoose.model("DynamicCmd", dynamicCmdSchema);
 
-// ══════════════════════════════════════════
-//   KNOWLEDGE BASE — 200+ دالة وأمر
-// ══════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════════
+//   KNOWLEDGE BASE ULTRA — 2000+ دالة وأمر
+// ══════════════════════════════════════════════════════════════════════════════════
 const KNOWLEDGE_BASE = `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- قاعدة المعرفة الكاملة — 200+ دالة وأمر
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ قاعدة المعرفة الكاملة ULTRA PRO MAX — 2000+ دالة وأمر
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-══════════════════════════════
- ١. إدارة المجموعة الكاملة
-══════════════════════════════
-// طرد مستخدم
-await api.removeUserFromGroup(userID, threadID);
+══════════════════════════════════════════
+ ١. إدارة المجموعة — GROUP MANAGEMENT
+══════════════════════════════════════════
 
-// إضافة مستخدم
-await api.addUserToGroup(userID, threadID);
+// [أمر: اطرد المنشن / طرد / kick]
+const targetKick = Object.keys(mentions)[0] || messageReply?.senderID;
+if (!targetKick) { api.sendMessage("❌ منشن شخص أو رد على رسالته", threadID, messageID); }
+else {
+  await api.removeUserFromGroup(targetKick, threadID);
+  api.sendMessage(`✅ تم طرد المستخدم بنجاح`, threadID, messageID);
+}
 
-// ترقية لأدمن
-await api.changeAdminStatus(threadID, userID, true);
+// [أمر: أضف / add / إضافة]
+const targetAdd = Object.keys(mentions)[0];
+if (!targetAdd) { api.sendMessage("❌ منشن شخص لإضافته", threadID, messageID); }
+else {
+  await api.addUserToGroup(targetAdd, threadID);
+  api.sendMessage(`✅ تمت إضافة المستخدم`, threadID, messageID);
+}
 
-// إزالة من الأدمن
-await api.changeAdminStatus(threadID, userID, false);
+// [أمر: رقِّ / ترقية / admin]
+const targetAdmin = Object.keys(mentions)[0] || messageReply?.senderID;
+if (!targetAdmin) { api.sendMessage("❌ منشن شخص لترقيته", threadID, messageID); }
+else {
+  await api.changeAdminStatus(threadID, targetAdmin, true);
+  api.sendMessage(`👑 تمت الترقية لأدمن`, threadID, messageID);
+}
 
-// تغيير اسم المجموعة
-await api.changeThreadName("الاسم الجديد", threadID);
+// [أمر: نزّل / نزله / إزالة من الأدمن]
+const targetDeAdmin = Object.keys(mentions)[0] || messageReply?.senderID;
+if (!targetDeAdmin) { api.sendMessage("❌ منشن شخص", threadID, messageID); }
+else {
+  await api.changeAdminStatus(threadID, targetDeAdmin, false);
+  api.sendMessage(`✅ تمت إزالته من الأدمن`, threadID, messageID);
+}
 
-// تغيير إيموجي المجموعة
-await api.changeThreadEmoji("🔥", threadID);
-
-// تغيير لون المحادثة
-await api.changeThreadColor("#FF0000", threadID);
-
-// تغيير لقب مستخدم
-await api.changeNickname("اللقب", threadID, userID);
-
-// كتم المجموعة (بالثواني، -1 = دائمي)
+// [أمر: قفل الكروب / قفل المجموعة / lock]
 await api.muteThread(threadID, -1);
+api.sendMessage("🔒 تم قفل المجموعة — فقط الأدمنز يستطيعون الكتابة", threadID, messageID);
 
-// رفع الكتم
+// [أمر: افتح الكروب / فتح المجموعة / unlock]
 await api.muteThread(threadID, 0);
+api.sendMessage("🔓 تم فتح المجموعة", threadID, messageID);
 
-// الحصول على قائمة أعضاء المجموعة
-const info = await api.getThreadInfo(threadID);
-const members = info.participantIDs;
-const admins  = info.adminIDs.map(a => a.id);
+// [أمر: غير اسم الكروب / غير اسم المجموعة]
+const newName = args.slice(1).join(" ");
+if (!newName) { api.sendMessage("❌ اكتب الاسم الجديد", threadID, messageID); }
+else {
+  await api.changeThreadName(newName, threadID);
+  api.sendMessage(`✅ تم تغيير اسم المجموعة إلى: ${newName}`, threadID, messageID);
+}
 
-// طرد كل الأعضاء ما عدا الأدمنز
-const info2 = await api.getThreadInfo(threadID);
-const adminIDs = info2.adminIDs.map(a => a.id);
-for (const uid of info2.participantIDs) {
-  if (!adminIDs.includes(uid) && uid !== api.getCurrentUserID())
+// [أمر: غير إيموجي / emoji]
+const newEmoji = args[1] || "🔥";
+await api.changeThreadEmoji(newEmoji, threadID);
+api.sendMessage(`✅ تم تغيير الإيموجي إلى ${newEmoji}`, threadID, messageID);
+
+// [أمر: غير لون المحادثة / color]
+const colors = { "أحمر":"#FF0000","أزرق":"#0000FF","أخضر":"#00FF00","أصفر":"#FFFF00","بنفسجي":"#800080","وردي":"#FFC0CB","برتقالي":"#FFA500","أسود":"#000000","أبيض":"#FFFFFF","رمادي":"#808080" };
+const colorInput = args.slice(1).join(" ");
+const colorHex = colors[colorInput] || colorInput || "#FF0000";
+await api.changeThreadColor(colorHex, threadID);
+api.sendMessage(`🎨 تم تغيير اللون إلى ${colorInput}`, threadID, messageID);
+
+// [أمر: غير لقب / لقب / nickname]
+const targetNick = Object.keys(mentions)[0] || messageReply?.senderID || senderID;
+const nickname = args.filter(a => !a.includes("@")).join(" ") || "مستخدم";
+await api.changeNickname(nickname, threadID, targetNick);
+api.sendMessage(`✅ تم تغيير اللقب إلى: ${nickname}`, threadID, messageID);
+
+// [أمر: عدد الأعضاء / كم عضو]
+const infoCount = await api.getThreadInfo(threadID);
+api.sendMessage(`👥 عدد أعضاء المجموعة: ${infoCount.participantIDs.length} عضو\n👑 عدد الأدمنز: ${infoCount.adminIDs.length}`, threadID, messageID);
+
+// [أمر: اسم المجموعة / اسم الكروب]
+const infoName = await api.getThreadInfo(threadID);
+api.sendMessage(`📛 اسم المجموعة: ${infoName.threadName || "بدون اسم"}\n🆔 ID: ${threadID}`, threadID, messageID);
+
+// [أمر: قائمة الأعضاء / كل الأعضاء]
+const infoMembers = await api.getThreadInfo(threadID);
+const adminList = infoMembers.adminIDs.map(a => a.id);
+let memberMsg = `👥 أعضاء المجموعة (${infoMembers.participantIDs.length}):\n\n`;
+for (const uid of infoMembers.participantIDs) {
+  memberMsg += adminList.includes(uid) ? `👑 ${uid}\n` : `👤 ${uid}\n`;
+}
+api.sendMessage(memberMsg, threadID, messageID);
+
+// [أمر: طرد الكل / kickall — يطرد الكل عدا الأدمنز]
+const infoKickAll = await api.getThreadInfo(threadID);
+const adminsKickAll = infoKickAll.adminIDs.map(a => a.id);
+let kicked = 0;
+for (const uid of infoKickAll.participantIDs) {
+  if (!adminsKickAll.includes(uid) && uid !== api.getCurrentUserID()) {
     await api.removeUserFromGroup(uid, threadID);
+    kicked++;
+  }
 }
+api.sendMessage(`✅ تم طرد ${kicked} عضو`, threadID, messageID);
 
-// إضافة قائمة مستخدمين دفعة واحدة
-const toAdd = ["111", "222", "333"];
-for (const uid of toAdd) await api.addUserToGroup(uid, threadID);
-
-// ترقية كل الأعضاء لأدمن
-const info3 = await api.getThreadInfo(threadID);
-for (const uid of info3.participantIDs)
+// [أمر: رقّ الكل / ترقية الكل / adminall]
+const infoAdminAll = await api.getThreadInfo(threadID);
+for (const uid of infoAdminAll.participantIDs)
   await api.changeAdminStatus(threadID, uid, true);
+api.sendMessage(`👑 تم ترقية جميع الأعضاء (${infoAdminAll.participantIDs.length}) لأدمن`, threadID, messageID);
 
-// إزالة كل الأدمنز
-const info4 = await api.getThreadInfo(threadID);
-for (const ad of info4.adminIDs)
+// [أمر: نزّل الكل / إزالة كل الأدمنز]
+const infoDeAll = await api.getThreadInfo(threadID);
+for (const ad of infoDeAll.adminIDs)
   await api.changeAdminStatus(threadID, ad.id, false);
+api.sendMessage(`✅ تمت إزالة ${infoDeAll.adminIDs.length} أدمن`, threadID, messageID);
 
-// عدد الأعضاء
-const info5 = await api.getThreadInfo(threadID);
-api.sendMessage("👥 عدد الأعضاء: " + info5.participantIDs.length, threadID, messageID);
+// [أمر: معلومات الكروب / info / معلومات المجموعة]
+const infoFull = await api.getThreadInfo(threadID);
+const infoText = `⌬ ━━ معلومات المجموعة ━━ ⌬\n\n📛 الاسم: ${infoFull.threadName || "بدون اسم"}\n🆔 ID: ${threadID}\n👥 الأعضاء: ${infoFull.participantIDs.length}\n👑 الأدمنز: ${infoFull.adminIDs.length}\n💬 الإيموجي: ${infoFull.emoji || "لا يوجد"}\n🎨 اللون: ${infoFull.color || "افتراضي"}`;
+api.sendMessage(infoText, threadID, messageID);
 
-// اسم المجموعة
-const info6 = await api.getThreadInfo(threadID);
-api.sendMessage("📛 اسم المجموعة: " + info6.threadName, threadID, messageID);
-
-// تغيير شعار المجموعة (من رابط)
-const axios2 = require("axios");
-const resImg = await axios2.get("رابط_الصورة", { responseType: "stream" });
-await api.changeGroupImage(resImg.data, threadID);
-
-// قفل المجموعة (فقط الأدمنز يكتبون) عبر كتم الكل
-// ليس مدعوماً مباشرة — نستخدم muteThread
-
-══════════════════════════════
- ٢. إدارة الرسائل
-══════════════════════════════
-// إرسال نص عادي
-api.sendMessage("نص", threadID);
-
-// إرسال مع رد على رسالة
-api.sendMessage({ body: "نص" }, threadID, () => {}, messageID);
-
-// حذف رسالة
-await api.unsendMessage(messageID);
-
-// تفاعل على رسالة
-api.setMessageReaction("❤️", messageID, () => {}, true);
-
-// إزالة تفاعل
-api.setMessageReaction("", messageID, () => {}, true);
-
-// إرسال لجميع الأعضاء (DM)
-const info7 = await api.getThreadInfo(threadID);
-for (const uid of info7.participantIDs)
-  api.sendMessage("رسالة خاصة", uid);
-
-// إرسال رسالة لمجموعات متعددة
-const threads = await api.getThreadList(50, null, ["INBOX"]);
-for (const t of threads) api.sendMessage("رسالة للكل", t.threadID);
-
-// إرسال رسالة مؤجلة (بعد 5 ثواني)
-setTimeout(() => api.sendMessage("رسالة مؤجلة", threadID), 5000);
-
-// رد تلقائي متكرر (كل دقيقة)
-setInterval(() => api.sendMessage("🔄 تذكير تلقائي", threadID), 60000);
-
-// تحويل رسالة
-await api.forwardMessage(event.messageReply?.messageID, threadID);
-
-// إرسال صورة من رابط
-const axiosImg = require("axios");
-const resI = await axiosImg.get("رابط_الصورة", { responseType: "stream" });
-api.sendMessage({ attachment: resI.data }, threadID, () => {}, messageID);
-
-// إرسال ملف صوتي
-const resAudio = await axiosImg.get("رابط_الصوت", { responseType: "stream" });
-api.sendMessage({ attachment: resAudio.data }, threadID);
-
-══════════════════════════════
- ٣. الاقتصاد الكامل
-══════════════════════════════
-// جلب بيانات مستخدم
-const data = await getUserData(userID);
-const money   = data?.currency?.money ?? 0;
-const exp     = data?.currency?.exp ?? 0;
-const level   = data?.currency?.level ?? 1;
-const rank    = data?.currency?.rank ?? "مبتدئ";
-const msgCount= data?.currency?.messageCount ?? 0;
-const progress= data?.calculated?.progress ?? 0;
-
-// إضافة فلوس
-await addMoney(userID, 1000);
-
-// سحب فلوس
-const result = await removeMoney(userID, 500);
-if (!result.success) api.sendMessage("❌ رصيد غير كافٍ", threadID);
-
-// تعيين رصيد محدد
-const curData = await getUserData(userID);
-const cur = curData?.currency?.money ?? 0;
-if (1000 > cur) await addMoney(userID, 1000 - cur);
-else await removeMoney(userID, cur - 1000);
-
-// إضافة XP
-await updateUserData(userID, { exp: (data?.currency?.exp ?? 0) + 500 });
-
-// تغيير الرتبة
-await updateUserData(userID, { rank: "أسطورة" });
-
-// تغيير المستوى
-await updateUserData(userID, { level: 50 });
-
-// ريست الاقتصاد
-await updateUserData(userID, { money: 0, exp: 0, level: 1, rank: "مبتدئ" });
-
-// إعطاء كل الأعضاء فلوس
-const infoE = await api.getThreadInfo(threadID);
-for (const uid of infoE.participantIDs) {
-  await ensureUser(uid);
-  await addMoney(uid, 500);
-}
-api.sendMessage("✅ تم إعطاء كل الأعضاء 500 $", threadID, messageID);
-
-// سلب فلوس المنشن وإعطاءها للمرسل
-const t1 = Object.keys(mentions)[0];
-const d1 = await getUserData(t1);
-const stolen = Math.floor((d1?.currency?.money ?? 0) * 0.1);
-await removeMoney(t1, stolen);
-await addMoney(senderID, stolen);
-api.sendMessage(\`💰 سرقت \${stolen} $ من المستخدم\`, threadID, messageID);
-
-// ترتيب المستخدمين بالفلوس
-const allU = await getAllUsers();
-const sorted = allU.sort((a,b) => (b.money??0) - (a.money??0)).slice(0,10);
-let board = "🏆 لوحة الأثرياء:\n\n";
-sorted.forEach((u,i) => { board += \`\${i+1}. \${u.userID}: \${u.money??0} $\n\`; });
-api.sendMessage(board, threadID, messageID);
-
-// مضاعفة فلوس المنشن
-const t2 = Object.keys(mentions)[0];
-const d2 = await getUserData(t2);
-const cur2 = d2?.currency?.money ?? 0;
-await addMoney(t2, cur2);
-api.sendMessage(\`✅ تم مضاعفة رصيد المستخدم إلى \${cur2*2} $\`, threadID, messageID);
-
-// تقسيم فلوس على كل الأعضاء
-const totalPool = 10000;
-const infoPool  = await api.getThreadInfo(threadID);
-const share = Math.floor(totalPool / infoPool.participantIDs.length);
-for (const uid of infoPool.participantIDs) {
-  await ensureUser(uid);
-  await addMoney(uid, share);
-}
-api.sendMessage(\`✅ تم توزيع \${share} $ على كل عضو\`, threadID, messageID);
-
-══════════════════════════════
- ٤. نظام الحظر الكامل
-══════════════════════════════
-// حظر مستخدم
-global.data.userBanned.set(userID, { reason: "سبب الحظر", date: Date.now() });
-
-// رفع حظر مستخدم
-global.data.userBanned.delete(userID);
-
-// حظر مجموعة
-global.data.threadBanned.set(threadID, { reason: "سبب", date: Date.now() });
-
-// رفع حظر مجموعة
-global.data.threadBanned.delete(threadID);
-
-// حظر أمر في مجموعة
-const cmdBanned = global.data.commandBanned.get(threadID) || [];
-cmdBanned.push("اسم_الأمر");
-global.data.commandBanned.set(threadID, cmdBanned);
-
-// رفع حظر أمر في مجموعة
-const cb = global.data.commandBanned.get(threadID) || [];
-global.data.commandBanned.set(threadID, cb.filter(c => c !== "اسم_الأمر"));
-
-// قائمة المحظورين
-const banned = [...global.data.userBanned.entries()];
-let banList = "🚫 قائمة المحظورين:\n\n";
-banned.forEach(([id, info]) => { banList += \`• \${id}: \${info.reason}\n\`; });
-api.sendMessage(banList || "✅ لا يوجد محظورون", threadID, messageID);
-
-// حظر كل الأعضاء ما عدا الأدمن
-const infoBan = await api.getThreadInfo(threadID);
-const adminsBan = infoBan.adminIDs.map(a => a.id);
-for (const uid of infoBan.participantIDs) {
-  if (!adminsBan.includes(uid) && !global.config.ADMINBOT.includes(uid))
-    global.data.userBanned.set(uid, { reason: "حظر جماعي" });
+// [أمر: غير صورة الكروب / صورة المجموعة]
+const imgUrl = messageReply?.attachments?.[0]?.url || args[1];
+if (!imgUrl) { api.sendMessage("❌ أرسل صورة أو أعطِ رابط", threadID, messageID); }
+else {
+  const imgRes = await axios.get(imgUrl, { responseType: "stream" });
+  await api.changeGroupImage(imgRes.data, threadID);
+  api.sendMessage("✅ تم تغيير صورة المجموعة", threadID, messageID);
 }
 
-// رفع كل الحظر
-global.data.userBanned.clear();
-api.sendMessage("✅ تم رفع حظر الجميع", threadID, messageID);
-
-══════════════════════════════
- ٥. معلومات وإحصائيات
-══════════════════════════════
-// معلومات مستخدم كاملة
-const uInfo = await api.getUserInfo(userID);
-const u = uInfo[userID];
-api.sendMessage(\`👤 الاسم: \${u.name}\nالجنس: \${u.gender}\nالنوع: \${u.type}\`, threadID, messageID);
-
-// معلومات المجموعة الكاملة
-const tInfo = await api.getThreadInfo(threadID);
-api.sendMessage(\`📌 اسم: \${tInfo.threadName}\n👥 أعضاء: \${tInfo.participantIDs.length}\n👑 أدمن: \${tInfo.adminIDs.length}\`, threadID, messageID);
-
-// بيانات اقتصادية للمستخدم
-const eData = await getUserData(senderID);
-api.sendMessage(
-  \`💰 رصيدك: \${eData?.currency?.money ?? 0} $\n⭐ XP: \${eData?.currency?.exp ?? 0}\nمستوى: \${eData?.currency?.level ?? 1}\nرتبة: \${eData?.currency?.rank ?? "مبتدئ"}\`,
-  threadID, messageID
-);
-
-// عدد الأوامر الكلي
-const cmdCount = global.client.commands.size;
-api.sendMessage("🤖 عدد الأوامر: " + cmdCount, threadID, messageID);
-
-// قائمة كل الأوامر
-const cmdList = [...global.client.commands.keys()].join(", ");
-api.sendMessage("📋 الأوامر:\n" + cmdList, threadID, messageID);
-
-// معلومات النظام
-const os = require("os");
-api.sendMessage(
-  \`⚙️ معلومات النظام:\nRAM: \${(os.freemem()/1024/1024).toFixed(0)} MB حر من \${(os.totalmem()/1024/1024).toFixed(0)} MB\nCPU: \${os.cpus()[0].model}\n\`,
-  threadID, messageID
-);
-
-// وقت التشغيل
-const uptime = process.uptime();
-const h = Math.floor(uptime/3600), m = Math.floor((uptime%3600)/60), s = Math.floor(uptime%60);
-api.sendMessage(\`⏱️ وقت التشغيل: \${h}h \${m}m \${s}s\`, threadID, messageID);
-
-// إحصائيات المجموعة
-const statsInfo = await api.getThreadInfo(threadID);
-const allMembersData = await Promise.all(statsInfo.participantIDs.map(uid => getUserData(uid)));
-const totalMoney = allMembersData.reduce((s, d) => s + (d?.currency?.money ?? 0), 0);
-api.sendMessage(
-  \`📊 إحصائيات المجموعة:\n👥 أعضاء: \${statsInfo.participantIDs.length}\n💰 مجموع الفلوس: \${totalMoney} $\`,
-  threadID, messageID
-);
-
-══════════════════════════════
- ٦. أوامر ترفيهية وألعاب
-══════════════════════════════
-// نكتة عشوائية
-const jokes = ["لماذا لا يلعب البرمجيون كرة القدم؟ لأنهم دائماً يتعاملون مع الـ bugs!", "ما الفرق بين البرمجي والبيتزا؟ البيتزا تطعم أسرة من 4 أشخاص!", "كيف تعرف إن برمجي يكذب؟ شفتاه تتحركان!"];
-api.sendMessage("😄 " + jokes[Math.floor(Math.random() * jokes.length)], threadID, messageID);
-
-// رقم عشوائي
-const min = parseInt(args[0]) || 1;
-const max = parseInt(args[1]) || 100;
-api.sendMessage(\`🎲 الرقم العشوائي: \${Math.floor(Math.random()*(max-min+1))+min}\`, threadID, messageID);
-
-// اختيار شخص عشوائي من المجموعة
-const infoRand = await api.getThreadInfo(threadID);
-const chosen = infoRand.participantIDs[Math.floor(Math.random()*infoRand.participantIDs.length)];
-const chosenInfo = await api.getUserInfo(chosen);
-api.sendMessage(\`🎯 الشخص المختار: @\${chosenInfo[chosen].name}\`, threadID, messageID);
-
-// لعبة قفشة
-const rand = Math.random();
-const outcome = rand > 0.6 ? "فزت! 🏆" : rand > 0.3 ? "تعادل 🤝" : "خسرت 💀";
-api.sendMessage("نتيجة القفشة: " + outcome, threadID, messageID);
-
-// 8ball
-const answers = ["نعم بالتأكيد ✅","لا أعتقد ❌","ربما 🤔","غير واضح 🌫️","بالتأكيد لا ❌","نعم! ✅"];
-api.sendMessage("🎱 " + answers[Math.floor(Math.random()*answers.length)], threadID, messageID);
-
-// عداد تنازلي
-let count = 5;
-const timer = setInterval(() => {
-  if (count <= 0) { clearInterval(timer); return api.sendMessage("🚀 انطلاق!", threadID); }
-  api.sendMessage(\`⏳ \${count--}\`, threadID);
-}, 1000);
-
-══════════════════════════════
- ٧. إدارة البوت والإعدادات
-══════════════════════════════
-// تغيير البادئة
-global.config.PREFIX = ".";
-api.sendMessage("✅ تم تغيير البادئة إلى: .", threadID, messageID);
-
-// تفعيل وضع المطور
-global.config.DeveloperMode = true;
-api.sendMessage("✅ وضع المطور مفعّل", threadID, messageID);
-
-// إيقاف البوت
-api.sendMessage("⚠️ سيتوقف البوت في 3 ثواني...", threadID, messageID);
-setTimeout(() => process.exit(0), 3000);
-
-// إعادة تشغيل البوت
-api.sendMessage("🔄 إعادة التشغيل...", threadID, messageID);
-setTimeout(() => process.exit(1), 2000);
-
-// تفعيل الوضع الصامت (adminOnly)
-global.config.adminOnly = true;
-api.sendMessage("🔇 البوت الآن في الوضع الصامت", threadID, messageID);
-
-// إلغاء الوضع الصامت
-global.config.adminOnly = false;
-api.sendMessage("🔊 البوت الآن متاح للجميع", threadID, messageID);
-
-// إضافة أدمن للبوت
-global.config.ADMINBOT.push(userID);
-api.sendMessage("✅ تمت إضافة أدمن للبوت", threadID, messageID);
-
-// إزالة أدمن من البوت
-global.config.ADMINBOT = global.config.ADMINBOT.filter(id => id !== userID);
-api.sendMessage("✅ تمت إزالة الأدمن من البوت", threadID, messageID);
-
-// قائمة أدمنز البوت
-api.sendMessage("👑 أدمنز البوت:\n" + global.config.ADMINBOT.join("\n"), threadID, messageID);
-
-══════════════════════════════
- ٨. الردود التلقائية
-══════════════════════════════
-// إضافة رد تلقائي
-if (!global.data.autoReply) global.data.autoReply = new Map();
-global.data.autoReply.set("مرحبا", "وعليكم السلام 👋");
-api.sendMessage("✅ تم إضافة الرد التلقائي", threadID, messageID);
-
-// حذف رد تلقائي
-if (global.data.autoReply) global.data.autoReply.delete("مرحبا");
-api.sendMessage("✅ تم حذف الرد التلقائي", threadID, messageID);
-
-══════════════════════════════
- ٩. عمليات متقدمة
-══════════════════════════════
-// نسخ احتياطي لبيانات المجموعة
-const backupInfo = await api.getThreadInfo(threadID);
-const backup = JSON.stringify({ name: backupInfo.threadName, members: backupInfo.participantIDs, admins: backupInfo.adminIDs });
-api.sendMessage("💾 نسخة احتياطية:\n" + backup.substring(0, 500), threadID, messageID);
-
-// إرسال رسالة ترحيب مخصصة للأعضاء الجدد
-const newMemberInfo = await api.getUserInfo(senderID);
-api.sendMessage(\`🎉 مرحباً \${newMemberInfo[senderID].name} في المجموعة!\nنتمنى لك وقتاً ممتعاً 🌟\`, threadID);
-
-// تنظيف الكاش
-if (global.data.threadInfo) global.data.threadInfo.clear();
-api.sendMessage("🧹 تم تنظيف الكاش", threadID, messageID);
-
-// بث رسالة لكل المجموعات
-const allThreads = await api.getThreadList(100, null, ["INBOX"]);
-let sentCount = 0;
-for (const t of allThreads) {
-  try { api.sendMessage("📢 إعلان: " + args.join(" "), t.threadID); sentCount++; } catch(_) {}
+// [أمر: كتم المنشن / mute user]
+const targetMute = Object.keys(mentions)[0] || messageReply?.senderID;
+if (!targetMute) { api.sendMessage("❌ منشن شخصاً", threadID, messageID); }
+else {
+  await api.removeUserFromGroup(targetMute, threadID);
+  setTimeout(async () => { await api.addUserToGroup(targetMute, threadID); }, 30000);
+  api.sendMessage(`🔇 تم كتم المستخدم لمدة 30 ثانية`, threadID, messageID);
 }
-api.sendMessage(\`✅ تم الإرسال لـ \${sentCount} مجموعة\`, threadID, messageID);
 
-// تغيير ألوان عشوائية للمجموعة
-const colors = ["#FF0000","#00FF00","#0000FF","#FF00FF","#FFFF00","#00FFFF"];
-const randomColor = colors[Math.floor(Math.random()*colors.length)];
+// [أمر: وداع / ترحيل / bye — طرد وتوديع]
+const targetBye = Object.keys(mentions)[0] || messageReply?.senderID;
+if (!targetBye) { api.sendMessage("❌ منشن شخص", threadID, messageID); }
+else {
+  api.sendMessage(`👋 وداعاً ${targetBye}! أتمنى لك حياة طيبة خارج هذه المجموعة 😄`, threadID, messageID);
+  setTimeout(async () => { await api.removeUserFromGroup(targetBye, threadID); }, 2000);
+}
+
+// [أمر: أضف الكل من محادثة أخرى — نقل أعضاء]
+const sourceThread = args[1];
+if (!sourceThread) { api.sendMessage("❌ أعطِ ID المحادثة المصدر", threadID, messageID); }
+else {
+  const srcInfo = await api.getThreadInfo(sourceThread);
+  let addedCount = 0;
+  for (const uid of srcInfo.participantIDs) {
+    try { await api.addUserToGroup(uid, threadID); addedCount++; } catch(e) {}
+  }
+  api.sendMessage(`✅ تم نقل ${addedCount} عضو`, threadID, messageID);
+}
+
+// [أمر: تغيير لقب الكل / لقب الجميع]
+const groupNick = args.slice(1).join(" ") || "عضو";
+const infoAllNick = await api.getThreadInfo(threadID);
+for (const uid of infoAllNick.participantIDs) {
+  try { await api.changeNickname(groupNick, threadID, uid); } catch(e) {}
+}
+api.sendMessage(`✅ تم تغيير لقب ${infoAllNick.participantIDs.length} عضو إلى: ${groupNick}`, threadID, messageID);
+
+// [أمر: اخرج من الكروب / leave]
+api.sendMessage("👋 وداعاً! أتركم الآن...", threadID, messageID);
+setTimeout(async () => { await api.removeUserFromGroup(api.getCurrentUserID(), threadID); }, 2000);
+
+// [أمر: إعادة تعيين الكروب / reset group]
+const resetColors = ["#FF0000","#00FF00","#0000FF","#FF69B4","#FFA500"];
+const randomColor = resetColors[Math.floor(Math.random() * resetColors.length)];
+await api.changeThreadName("مجموعة جديدة", threadID);
+await api.changeThreadEmoji("✨", threadID);
 await api.changeThreadColor(randomColor, threadID);
-api.sendMessage("🎨 تم تغيير اللون إلى " + randomColor, threadID, messageID);
+api.sendMessage("✅ تم إعادة تعيين المجموعة بنجاح", threadID, messageID);
 
-// إرسال رسالة منسقة بالجدول
-const tableData = [["الاسم","الفلوس","الرتبة"],["أيمن","5000","ملك"],["خالد","3000","أسطورة"]];
-const table = tableData.map(row => row.join(" | ")).join("\n");
-api.sendMessage("📊 الجدول:\n\n" + table, threadID, messageID);
+// [أمر: تحقق من الأدمنز / من الأدمن]
+const infoCheckAdmin = await api.getThreadInfo(threadID);
+const adminListCheck = infoCheckAdmin.adminIDs.map(a => a.id);
+const isAdmin = adminListCheck.includes(senderID);
+api.sendMessage(isAdmin ? "👑 نعم، أنت أدمن في هذه المجموعة" : "❌ لست أدمناً في هذه المجموعة", threadID, messageID);
 
-// تشغيل أمر آخر برمجياً
-const targetCmd = global.client.commands.get("اسم_الأمر");
-if (targetCmd) await targetCmd.run({ api, event, args, mentions, threadID, messageID, senderID });
+// [أمر: تقرير الكروب / تقرير / report]
+const infoReport = await api.getThreadInfo(threadID);
+const adminCount = infoReport.adminIDs.length;
+const memberCount = infoReport.participantIDs.length;
+const reportMsg = `📊 تقرير المجموعة:\n\n👥 الأعضاء: ${memberCount}\n👑 الأدمنز: ${adminCount}\n👤 الأعضاء العاديون: ${memberCount - adminCount}\n📛 الاسم: ${infoReport.threadName || "بدون اسم"}\n🆔 ID: ${threadID}`;
+api.sendMessage(reportMsg, threadID, messageID);
 
-// فحص اتصال الإنترنت
-try {
-  await axios.get("https://www.google.com", { timeout: 5000 });
-  api.sendMessage("✅ الاتصال بالإنترنت يعمل", threadID, messageID);
-} catch { api.sendMessage("❌ لا يوجد اتصال", threadID, messageID); }
+// [أمر: تصفية الكروب / طرد غير الأدمنز]
+const infoFilter = await api.getThreadInfo(threadID);
+const adminsFilter = infoFilter.adminIDs.map(a => a.id);
+const nonAdmins = infoFilter.participantIDs.filter(uid => !adminsFilter.includes(uid) && uid !== api.getCurrentUserID());
+api.sendMessage(`⚠️ سيتم طرد ${nonAdmins.length} عضو غير أدمن. هل أنت متأكد؟ اكتب: كينو تأكيد الطرد`, threadID, messageID);
 
-// حساب الوقت المنقضي منذ آخر رسالة
-const lastMsg = event.timestamp;
-const elapsed = Date.now() - lastMsg;
-api.sendMessage(\`⏱️ منذ آخر رسالة: \${(elapsed/1000).toFixed(1)} ثانية\`, threadID, messageID);
+══════════════════════════════════════════
+ ٢. إدارة الرسائل — MESSAGE MANAGEMENT
+══════════════════════════════════════════
 
-══════════════════════════════
- ١٠. نماذج أوامر جاهزة كاملة
-══════════════════════════════
-// نموذج: طرد المنشن مع تأكيد
-const kickTarget = Object.keys(mentions)[0];
-if (!kickTarget) return api.sendMessage("❌ منشن شخصاً لطرده", threadID, messageID);
-if (global.config.ADMINBOT.includes(kickTarget)) return api.sendMessage("❌ لا يمكن طرد أدمن البوت", threadID, messageID);
-await api.removeUserFromGroup(kickTarget, threadID);
-const kickInfo = await api.getUserInfo(kickTarget);
-api.sendMessage(\`🚫 تم طرد \${kickInfo[kickTarget]?.name ?? kickTarget}\`, threadID, messageID);
+// [أمر: أرسل رسالة / send / بث]
+const msgToSend = args.slice(1).join(" ");
+if (!msgToSend) { api.sendMessage("❌ اكتب الرسالة بعد الأمر", threadID, messageID); }
+else { api.sendMessage(msgToSend, threadID, messageID); }
 
-// نموذج: باند مع طرد
-const banTarget = Object.keys(mentions)[0];
-if (!banTarget) return api.sendMessage("❌ منشن شخصاً", threadID, messageID);
-global.data.userBanned.set(banTarget, { reason: args.slice(1).join(" ") || "بدون سبب", date: Date.now() });
-await api.removeUserFromGroup(banTarget, threadID);
-api.sendMessage(\`⛔ تم حظر وطرد المستخدم\`, threadID, messageID);
-
-// نموذج: إعطاء فلوس مع رسالة
-const giveTarget = Object.keys(mentions)[0];
-const giveAmount = parseInt(args[0]) || 1000;
-if (!giveTarget) return api.sendMessage("❌ منشن شخصاً", threadID, messageID);
-await ensureUser(giveTarget);
-await addMoney(giveTarget, giveAmount);
-const giveInfo = await api.getUserInfo(giveTarget);
-api.sendMessage(\`💰 تم إعطاء \${giveAmount} $ لـ \${giveInfo[giveTarget]?.name ?? giveTarget}\`, threadID, messageID);
-
-// نموذج: بروفايل كامل
-const profileTarget = Object.keys(mentions)[0] || senderID;
-const profileData = await getUserData(profileTarget);
-const profileInfo = await api.getUserInfo(profileTarget);
-const pName = profileInfo[profileTarget]?.name ?? "مجهول";
-api.sendMessage(
-  \`👤 بروفايل: \${pName}\n━━━━━━━━━━━━\n💰 فلوس: \${profileData?.currency?.money ?? 0} $\n⭐ XP: \${profileData?.currency?.exp ?? 0}\n📊 مستوى: \${profileData?.currency?.level ?? 1}\n🏆 رتبة: \${profileData?.currency?.rank ?? "مبتدئ"}\n💬 رسائل: \${profileData?.currency?.messageCount ?? 0}\`,
-  threadID, messageID
-);
-
-// نموذج: تحذير مع عداد
-if (!global.data.warnings) global.data.warnings = new Map();
-const warnTarget = Object.keys(mentions)[0];
-if (!warnTarget) return api.sendMessage("❌ منشن شخصاً", threadID, messageID);
-const warnKey = \`\${threadID}_\${warnTarget}\`;
-const warnCount = (global.data.warnings.get(warnKey) || 0) + 1;
-global.data.warnings.set(warnKey, warnCount);
-if (warnCount >= 3) {
-  await api.removeUserFromGroup(warnTarget, threadID);
-  global.data.warnings.delete(warnKey);
-  api.sendMessage(\`🚫 تم طرد المستخدم بعد \${warnCount} تحذيرات\`, threadID, messageID);
-} else {
-  api.sendMessage(\`⚠️ تحذير \${warnCount}/3 — المزيد سيؤدي للطرد\`, threadID, messageID);
+// [أمر: احذف الرسالة / حذف / unsend]
+const targetMsg = messageReply?.messageID;
+if (!targetMsg) { api.sendMessage("❌ رد على الرسالة التي تريد حذفها", threadID, messageID); }
+else {
+  await api.unsendMessage(targetMsg);
+  api.sendMessage("✅ تم حذف الرسالة", threadID, messageID);
 }
 
-// نموذج: لوحة ترتيب كاملة
-const rankUsers = await getAllUsers();
-const top10 = rankUsers.sort((a,b) => (b.money??0)-(a.money??0)).slice(0,10);
-let leaderboard = "🏆 لوحة المتصدرين:\n━━━━━━━━━━━━\n";
+// [أمر: تفاعل / reaction / ردة فعل]
+const reactionEmoji = args[1] || "❤️";
+const targetReaction = messageReply?.messageID || messageID;
+api.setMessageReaction(reactionEmoji, targetReaction, () => {}, true);
+
+// [أمر: حب الرسالة / قلب / heart]
+api.setMessageReaction("❤️", messageReply?.messageID || messageID, () => {}, true);
+
+// [أمر: ضحك على الرسالة / haha]
+api.setMessageReaction("😆", messageReply?.messageID || messageID, () => {}, true);
+
+// [أمر: واو / wow]
+api.setMessageReaction("😮", messageReply?.messageID || messageID, () => {}, true);
+
+// [أمر: حزين / sad]
+api.setMessageReaction("😢", messageReply?.messageID || messageID, () => {}, true);
+
+// [أمر: غضب / angry]
+api.setMessageReaction("😡", messageReply?.messageID || messageID, () => {}, true);
+
+// [أمر: إزالة التفاعل / remove reaction]
+api.setMessageReaction("", messageReply?.messageID || messageID, () => {}, true);
+api.sendMessage("✅ تم إزالة التفاعل", threadID, messageID);
+
+// [أمر: بث / broadcast / أرسل للكل]
+const broadcastMsg = args.slice(1).join(" ");
+if (!broadcastMsg) { api.sendMessage("❌ اكتب الرسالة للبث", threadID, messageID); }
+else {
+  const infoBcast = await api.getThreadInfo(threadID);
+  let sentCount = 0;
+  for (const uid of infoBcast.participantIDs) {
+    try { api.sendMessage(`📢 ${broadcastMsg}`, uid); sentCount++; } catch(e) {}
+  }
+  api.sendMessage(`✅ تم إرسال الرسالة لـ ${sentCount} شخص`, threadID, messageID);
+}
+
+// [أمر: رسالة مؤجلة / delayed / بعد X ثانية]
+const delaySeconds = parseInt(args[1]) || 10;
+const delayedMsg = args.slice(2).join(" ") || "رسالة مؤجلة";
+api.sendMessage(`⏳ سيتم إرسال الرسالة بعد ${delaySeconds} ثانية...`, threadID, messageID);
+setTimeout(() => api.sendMessage(`⏰ ${delayedMsg}`, threadID, messageID), delaySeconds * 1000);
+
+// [أمر: أرسل صورة / send image / صورة من رابط]
+const imageUrl = args[1] || messageReply?.attachments?.[0]?.url;
+if (!imageUrl) { api.sendMessage("❌ أعطِ رابط الصورة", threadID, messageID); }
+else {
+  const imgStream = await axios.get(imageUrl, { responseType: "stream" });
+  api.sendMessage({ attachment: imgStream.data }, threadID, () => {}, messageID);
+}
+
+// [أمر: تحويل رسالة / forward]
+const forwardMsgID = messageReply?.messageID;
+if (!forwardMsgID) { api.sendMessage("❌ رد على الرسالة التي تريد تحويلها", threadID, messageID); }
+else {
+  await api.forwardMessage(forwardMsgID, threadID);
+  api.sendMessage("✅ تم تحويل الرسالة", threadID, messageID);
+}
+
+// [أمر: رد تلقائي متكرر / auto reply / كل X دقيقة]
+const intervalMin = parseInt(args[1]) || 5;
+const intervalMsg = args.slice(2).join(" ") || "🔔 تذكير تلقائي";
+const intervalId = setInterval(() => api.sendMessage(intervalMsg, threadID), intervalMin * 60000);
+api.sendMessage(`✅ سيتم إرسال "${intervalMsg}" كل ${intervalMin} دقيقة`, threadID, messageID);
+
+// [أمر: أرسل GIF / gif]
+const gifUrls = [
+  "https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.gif",
+  "https://media.giphy.com/media/3oz8xAFtqoOUUrsh7W/giphy.gif",
+  "https://media.giphy.com/media/l4FGrYKtP0pBGpBAY/giphy.gif"
+];
+const gifUrl = gifUrls[Math.floor(Math.random() * gifUrls.length)];
+const gifStream = await axios.get(gifUrl, { responseType: "stream" });
+api.sendMessage({ attachment: gifStream.data }, threadID, () => {}, messageID);
+
+// [أمر: مسح محادثة / clear]
+api.sendMessage("🗑️ لا يمكن مسح المحادثة بشكل كامل، لكن يمكن حذف رسائل محددة بالرد عليها", threadID, messageID);
+
+// [أمر: تثبيت رسالة / pin — إشعار]
+const pinMsg = messageReply?.body || args.slice(1).join(" ");
+if (!pinMsg) { api.sendMessage("❌ رد على رسالة أو اكتب النص", threadID, messageID); }
+else {
+  await api.changeThreadName(`📌 ${pinMsg.substring(0,50)}`, threadID);
+  api.sendMessage(`📌 تم تثبيت: "${pinMsg.substring(0,100)}"`, threadID, messageID);
+}
+
+// [أمر: عدد رسائل / إحصائيات الرسائل]
+const msgData = await getUserData(senderID);
+const myMsgCount = msgData?.currency?.messageCount ?? 0;
+api.sendMessage(`📨 إجمالي رسائلك: ${myMsgCount} رسالة`, threadID, messageID);
+
+══════════════════════════════════════════
+ ٣. الاقتصاد المتقدم — ADVANCED ECONOMY
+══════════════════════════════════════════
+
+// [أمر: رصيدي / فلوسي / balance]
+await ensureUser(senderID);
+const balData = await getUserData(senderID);
+const balMoney = balData?.currency?.money ?? 0;
+const balExp   = balData?.currency?.exp ?? 0;
+const balLvl   = balData?.currency?.level ?? 1;
+const balRank  = balData?.currency?.rank ?? "مبتدئ";
+const balMsg = `💰 ━━ محفظتك ━━ 💰\n\n💵 الرصيد: ${balMoney.toLocaleString()} $\n⭐ XP: ${balExp}\n📊 المستوى: ${balLvl}\n🏅 الرتبة: ${balRank}`;
+api.sendMessage(balMsg, threadID, messageID);
+
+// [أمر: أعطِ فلوس / give money / منح]
+const giveTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+const giveAmount = parseInt(args.find(a => /^\d+$/.test(a))) || 1000;
+if (!giveTarget) { api.sendMessage("❌ منشن شخصاً", threadID, messageID); }
+else {
+  await ensureUser(giveTarget);
+  await addMoney(giveTarget, giveAmount);
+  api.sendMessage(`💸 تم إعطاء ${giveAmount.toLocaleString()} $ للمستخدم`, threadID, messageID);
+}
+
+// [أمر: خذ فلوس / سحب فلوس / remove money]
+const takeTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+const takeAmount = parseInt(args.find(a => /^\d+$/.test(a))) || 1000;
+if (!takeTarget) { api.sendMessage("❌ منشن شخصاً", threadID, messageID); }
+else {
+  const takeResult = await removeMoney(takeTarget, takeAmount);
+  if (!takeResult.success) api.sendMessage("❌ رصيد غير كافٍ لدى المستخدم", threadID, messageID);
+  else api.sendMessage(`✅ تم سحب ${takeAmount.toLocaleString()} $ من المستخدم`, threadID, messageID);
+}
+
+// [أمر: سرق / سرقة / steal]
+const stealTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+if (!stealTarget || stealTarget === senderID) { api.sendMessage("❌ منشن شخصاً مختلفاً", threadID, messageID); }
+else {
+  await ensureUser(senderID);
+  await ensureUser(stealTarget);
+  const stealSenderData = await getUserData(senderID);
+  const stealVictimData = await getUserData(stealTarget);
+  const stealSenderLvl = stealSenderData?.currency?.level ?? 1;
+  const victimMoney = stealVictimData?.currency?.money ?? 0;
+  const successChance = Math.min(10 + stealSenderLvl * 2, 60);
+  const rand = Math.random() * 100;
+  if (rand < successChance) {
+    const stolen = Math.floor(victimMoney * (0.05 + Math.random() * 0.1));
+    if (stolen < 1) { api.sendMessage("😂 الضحية مفلسة! ما في شيء تسرقه", threadID, messageID); }
+    else {
+      await removeMoney(stealTarget, stolen);
+      await addMoney(senderID, stolen);
+      api.sendMessage(`🦹 نجحت السرقة!\n💰 سرقت ${stolen.toLocaleString()} $ من الضحية\n📊 نسبة النجاح كانت ${successChance}%`, threadID, messageID);
+    }
+  } else {
+    const penalty = Math.floor((stealSenderData?.currency?.money ?? 0) * 0.05);
+    await removeMoney(senderID, penalty);
+    api.sendMessage(`🚨 فشلت السرقة! تم خصم ${penalty.toLocaleString()} $ منك كغرامة`, threadID, messageID);
+  }
+}
+
+// [أمر: تحويل فلوس / transfer / حول]
+const transferTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+const transferAmount = parseInt(args.find(a => /^\d+$/.test(a))) || 100;
+if (!transferTarget || transferTarget === senderID) { api.sendMessage("❌ منشن شخصاً مختلفاً", threadID, messageID); }
+else {
+  await ensureUser(senderID);
+  await ensureUser(transferTarget);
+  const transferResult = await removeMoney(senderID, transferAmount);
+  if (!transferResult.success) { api.sendMessage("❌ رصيدك غير كافٍ", threadID, messageID); }
+  else {
+    await addMoney(transferTarget, transferAmount);
+    api.sendMessage(`💸 تم تحويل ${transferAmount.toLocaleString()} $ بنجاح!`, threadID, messageID);
+  }
+}
+
+// [أمر: لوحة الصدارة / top / الأثرياء]
+const allUsersTop = await getAllUsers();
+const sortedTop = allUsersTop.sort((a,b) => (b.money??0) - (a.money??0)).slice(0,10);
+let topBoard = "🏆 ━━ لوحة الأثرياء ━━ 🏆\n\n";
 const medals = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"];
-top10.forEach((u,i) => { leaderboard += \`\${medals[i]} \${u.userID}: \${u.money??0} $\n\`; });
-api.sendMessage(leaderboard, threadID, messageID);
+sortedTop.forEach((u,i) => { topBoard += `${medals[i]} ${u.userID}: ${(u.money??0).toLocaleString()} $\n`; });
+api.sendMessage(topBoard, threadID, messageID);
+
+// [أمر: لوحة المستوى / top xp / أذكى]
+const allUsersXP = await getAllUsers();
+const sortedXP = allUsersXP.sort((a,b) => (b.exp??0) - (a.exp??0)).slice(0,10);
+let xpBoard = "⭐ ━━ لوحة الأذكياء (XP) ━━ ⭐\n\n";
+sortedXP.forEach((u,i) => { xpBoard += `${i+1}. ${u.userID}: ${(u.exp??0).toLocaleString()} XP — مستوى ${u.level??1}\n`; });
+api.sendMessage(xpBoard, threadID, messageID);
+
+// [أمر: ريست / reset / تصفير]
+const resetTarget2 = Object.keys(mentions)[0] || messageReply?.senderID || senderID;
+await ensureUser(resetTarget2);
+await updateUserData(resetTarget2, { money: 0, exp: 0, level: 1, rank: "مبتدئ", messageCount: 0 });
+api.sendMessage(`🔄 تم تصفير بيانات المستخدم بالكامل`, threadID, messageID);
+
+// [أمر: إعطاء الكل / give all / مكافأة جماعية]
+const giveAllAmount = parseInt(args.find(a => /^\d+$/.test(a))) || 500;
+const infoGiveAll = await api.getThreadInfo(threadID);
+let giveAllCount = 0;
+for (const uid of infoGiveAll.participantIDs) {
+  await ensureUser(uid);
+  await addMoney(uid, giveAllAmount);
+  giveAllCount++;
+}
+api.sendMessage(`🎁 تم إعطاء ${giveAllAmount.toLocaleString()} $ لـ ${giveAllCount} عضو!\n💰 المجموع: ${(giveAllAmount * giveAllCount).toLocaleString()} $`, threadID, messageID);
+
+// [أمر: بنك / bank / إيداع]
+const bankAction = args[1];
+const bankAmount = parseInt(args[2]) || 0;
+await ensureUser(senderID);
+const bankUserData = await getUserData(senderID);
+const bankMoney = bankUserData?.currency?.money ?? 0;
+const bankSavings = bankUserData?.currency?.bank ?? 0;
+if (bankAction === "إيداع" || bankAction === "deposit") {
+  if (bankAmount > bankMoney) { api.sendMessage("❌ رصيدك غير كافٍ", threadID, messageID); }
+  else {
+    await removeMoney(senderID, bankAmount);
+    await updateUserData(senderID, { bank: bankSavings + bankAmount });
+    api.sendMessage(`🏦 تم إيداع ${bankAmount.toLocaleString()} $ في البنك\n💳 رصيد البنك: ${(bankSavings + bankAmount).toLocaleString()} $`, threadID, messageID);
+  }
+} else if (bankAction === "سحب" || bankAction === "withdraw") {
+  if (bankAmount > bankSavings) { api.sendMessage("❌ رصيد البنك غير كافٍ", threadID, messageID); }
+  else {
+    await addMoney(senderID, bankAmount);
+    await updateUserData(senderID, { bank: bankSavings - bankAmount });
+    api.sendMessage(`💸 تم سحب ${bankAmount.toLocaleString()} $ من البنك`, threadID, messageID);
+  }
+} else {
+  api.sendMessage(`🏦 ━━ بنك كيرا ━━ 🏦\n\n💵 رصيد المحفظة: ${bankMoney.toLocaleString()} $\n🏦 رصيد البنك: ${bankSavings.toLocaleString()} $\n\n• كينو بنك إيداع [مبلغ]\n• كينو بنك سحب [مبلغ]`, threadID, messageID);
+}
+
+// [أمر: مشروع / project / استثمار]
+await ensureUser(senderID);
+const projData = await getUserData(senderID);
+const projMoney = projData?.currency?.money ?? 0;
+const projCost = parseInt(args.find(a => /^\d+$/.test(a))) || 5000;
+const projects = [
+  { name: "مطعم", minReturn: 1.2, maxReturn: 2.5, risk: 20 },
+  { name: "متجر إلكتروني", minReturn: 1.5, maxReturn: 3.0, risk: 30 },
+  { name: "عقارات", minReturn: 1.8, maxReturn: 4.0, risk: 40 },
+  { name: "تعدين عملات رقمية", minReturn: 0.5, maxReturn: 10, risk: 70 },
+  { name: "شركة ناشئة", minReturn: 0.1, maxReturn: 20, risk: 80 }
+];
+const proj = projects[Math.floor(Math.random() * projects.length)];
+if (projCost > projMoney) { api.sendMessage(`❌ تحتاج ${projCost.toLocaleString()} $ للاستثمار. رصيدك: ${projMoney.toLocaleString()} $`, threadID, messageID); }
+else {
+  const result2 = await removeMoney(senderID, projCost);
+  if (!result2.success) { api.sendMessage("❌ فشل الاستثمار", threadID, messageID); }
+  else {
+    const failed = Math.random() * 100 < proj.risk;
+    if (failed) {
+      api.sendMessage(`📉 فشل مشروع ${proj.name}!\nخسرت ${projCost.toLocaleString()} $ 😭`, threadID, messageID);
+    } else {
+      const multiplier = proj.minReturn + Math.random() * (proj.maxReturn - proj.minReturn);
+      const profit = Math.floor(projCost * multiplier);
+      await addMoney(senderID, profit);
+      api.sendMessage(`📈 نجح مشروع ${proj.name}!\n💰 استثمرت: ${projCost.toLocaleString()} $\n💵 ربحت: ${profit.toLocaleString()} $\n📊 العائد: ${(multiplier * 100).toFixed(0)}%`, threadID, messageID);
+    }
+  }
+}
+
+// [أمر: يومي / daily / مكافأة يومية]
+await ensureUser(senderID);
+const dailyData = await getUserData(senderID);
+const lastDaily = dailyData?.currency?.lastDaily ?? 0;
+const now24 = Date.now();
+const diff24 = now24 - lastDaily;
+const hours24 = Math.floor(diff24 / 3600000);
+if (diff24 < 86400000) {
+  const remaining = 24 - hours24;
+  api.sendMessage(`⏰ يجب الانتظار ${remaining} ساعة للمكافأة اليومية التالية`, threadID, messageID);
+} else {
+  const dailyLvl = dailyData?.currency?.level ?? 1;
+  const dailyReward = 500 + (dailyLvl * 100);
+  await addMoney(senderID, dailyReward);
+  await updateUserData(senderID, { lastDaily: now24 });
+  api.sendMessage(`🎁 مكافأتك اليومية:\n💰 +${dailyReward.toLocaleString()} $\n⭐ +50 XP`, threadID, messageID);
+}
+
+// [أمر: أسبوعي / weekly / مكافأة أسبوعية]
+await ensureUser(senderID);
+const weeklyData = await getUserData(senderID);
+const lastWeekly = weeklyData?.currency?.lastWeekly ?? 0;
+const nowWeek = Date.now();
+if (nowWeek - lastWeekly < 604800000) {
+  const daysLeft = Math.ceil((604800000 - (nowWeek - lastWeekly)) / 86400000);
+  api.sendMessage(`⏰ باقي ${daysLeft} أيام للمكافأة الأسبوعية`, threadID, messageID);
+} else {
+  const weeklyLvl = weeklyData?.currency?.level ?? 1;
+  const weeklyReward = 5000 + (weeklyLvl * 500);
+  await addMoney(senderID, weeklyReward);
+  await updateUserData(senderID, { lastWeekly: nowWeek });
+  api.sendMessage(`🎊 مكافأتك الأسبوعية:\n💰 +${weeklyReward.toLocaleString()} $\n⭐ +500 XP`, threadID, messageID);
+}
+
+// [أمر: عمل / work / شغل]
+await ensureUser(senderID);
+const workData = await getUserData(senderID);
+const lastWork = workData?.currency?.lastWork ?? 0;
+const nowWork = Date.now();
+if (nowWork - lastWork < 3600000) {
+  const minsLeft = Math.ceil((3600000 - (nowWork - lastWork)) / 60000);
+  api.sendMessage(`⏰ يجب الانتظار ${minsLeft} دقيقة قبل العمل مجدداً`, threadID, messageID);
+} else {
+  const workJobs = ["مبرمج 💻","مصمم 🎨","محاسب 📊","مهندس 🔧","طبيب 🏥","معلم 📚","شيف 🍳","محامي ⚖️"];
+  const job = workJobs[Math.floor(Math.random() * workJobs.length)];
+  const workLvl = workData?.currency?.level ?? 1;
+  const workReward = Math.floor((100 + Math.random() * 400) * (1 + workLvl * 0.1));
+  const xpReward = Math.floor(10 + Math.random() * 40);
+  await addMoney(senderID, workReward);
+  await updateUserData(senderID, { lastWork: nowWork, exp: (workData?.currency?.exp ?? 0) + xpReward });
+  api.sendMessage(`💼 عملت كـ${job}\n💰 +${workReward.toLocaleString()} $\n⭐ +${xpReward} XP`, threadID, messageID);
+}
+
+══════════════════════════════════════════
+ ٤. الألعاب — GAMES
+══════════════════════════════════════════
+
+// [أمر: روليت / roulette / قمار]
+await ensureUser(senderID);
+const roulBet = parseInt(args.find(a => /^\d+$/.test(a))) || 100;
+const roulData = await getUserData(senderID);
+const roulMoney = roulData?.currency?.money ?? 0;
+if (roulBet > roulMoney) { api.sendMessage(`❌ رصيدك غير كافٍ. رصيدك: ${roulMoney.toLocaleString()} $`, threadID, messageID); }
+else {
+  const roulResult = Math.floor(Math.random() * 37);
+  const roulColors = ["🔴","⚫","⚫","🔴","⚫","🔴","⚫","🔴","⚫","🔴","⚫","⚫","🔴","⚫","🔴","⚫","🔴","⚫","🟢","🔴","⚫","🔴","⚫","🔴","⚫","🔴","⚫","🔴","⚫","⚫","🔴","⚫","🔴","⚫","🔴","⚫","🔴"];
+  const roulColor = roulColors[roulResult] || "🟢";
+  const roulWon = roulResult === 0 ? roulBet * 35 : (Math.random() > 0.5 ? roulBet * 2 : 0);
+  if (roulWon > 0) {
+    await addMoney(senderID, roulWon - roulBet);
+    api.sendMessage(`🎰 الروليت!\n\n🎯 الرقم: ${roulResult} ${roulColor}\n💰 الرهان: ${roulBet.toLocaleString()} $\n✅ فزت بـ ${roulWon.toLocaleString()} $!`, threadID, messageID);
+  } else {
+    await removeMoney(senderID, roulBet);
+    api.sendMessage(`🎰 الروليت!\n\n🎯 الرقم: ${roulResult} ${roulColor}\n💰 الرهان: ${roulBet.toLocaleString()} $\n❌ خسرت!`, threadID, messageID);
+  }
+}
+
+// [أمر: سلوت / slot machine / ماكينة]
+await ensureUser(senderID);
+const slotBet = parseInt(args.find(a => /^\d+$/.test(a))) || 100;
+const slotData = await getUserData(senderID);
+const slotMoney = slotData?.currency?.money ?? 0;
+if (slotBet > slotMoney) { api.sendMessage(`❌ رصيدك غير كافٍ`, threadID, messageID); }
+else {
+  const slotSymbols = ["🍒","🍊","🍋","🍇","⭐","💎","7️⃣","🔔"];
+  const s1 = slotSymbols[Math.floor(Math.random() * slotSymbols.length)];
+  const s2 = slotSymbols[Math.floor(Math.random() * slotSymbols.length)];
+  const s3 = slotSymbols[Math.floor(Math.random() * slotSymbols.length)];
+  let slotWin = 0;
+  let slotMsg = "";
+  if (s1 === s2 && s2 === s3) {
+    const multipliers = { "💎": 50, "7️⃣": 30, "⭐": 20, "🔔": 15, "🍇": 10, "🍒": 8, "🍊": 6, "🍋": 5 };
+    slotWin = slotBet * (multipliers[s1] || 5);
+    slotMsg = `🎊 جاكبوت! ثلاثة متطابقة!`;
+  } else if (s1 === s2 || s2 === s3 || s1 === s3) {
+    slotWin = slotBet * 2;
+    slotMsg = `✅ اثنان متطابقان!`;
+  } else {
+    slotMsg = `❌ لا تطابق`;
+  }
+  if (slotWin > 0) {
+    await addMoney(senderID, slotWin - slotBet);
+    api.sendMessage(`🎰 ماكينة السلوت!\n\n[ ${s1} | ${s2} | ${s3} ]\n\n${slotMsg}\n💰 ربحت: ${slotWin.toLocaleString()} $`, threadID, messageID);
+  } else {
+    await removeMoney(senderID, slotBet);
+    api.sendMessage(`🎰 ماكينة السلوت!\n\n[ ${s1} | ${s2} | ${s3} ]\n\n${slotMsg}\n❌ خسرت: ${slotBet.toLocaleString()} $`, threadID, messageID);
+  }
+}
+
+// [أمر: نرد / dice / كعب الحظ]
+await ensureUser(senderID);
+const diceBet = parseInt(args.find(a => /^\d+$/.test(a))) || 100;
+const diceChoice = parseInt(args[args.length - 1]);
+const diceData = await getUserData(senderID);
+const diceMoney = diceData?.currency?.money ?? 0;
+if (diceBet > diceMoney) { api.sendMessage(`❌ رصيدك غير كافٍ`, threadID, messageID); }
+else if (!diceChoice || diceChoice < 1 || diceChoice > 6) { api.sendMessage("🎲 اختر رقماً بين 1 و 6\nمثال: كينو نرد 500 3", threadID, messageID); }
+else {
+  const diceResult = Math.floor(Math.random() * 6) + 1;
+  const diceEmojis = ["","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣"];
+  if (diceResult === diceChoice) {
+    const diceWin = diceBet * 5;
+    await addMoney(senderID, diceWin - diceBet);
+    api.sendMessage(`🎲 النرد!\n\nاخترت: ${diceEmojis[diceChoice]}\nالنتيجة: ${diceEmojis[diceResult]}\n\n🎉 فزت بـ ${diceWin.toLocaleString()} $!`, threadID, messageID);
+  } else {
+    await removeMoney(senderID, diceBet);
+    api.sendMessage(`🎲 النرد!\n\nاخترت: ${diceEmojis[diceChoice]}\nالنتيجة: ${diceEmojis[diceResult]}\n\n❌ خسرت ${diceBet.toLocaleString()} $`, threadID, messageID);
+  }
+}
+
+// [أمر: تخمين / guess / خمن]
+await ensureUser(senderID);
+const guessNum = parseInt(args[1]);
+const secretNum = Math.floor(Math.random() * 10) + 1;
+if (!guessNum || guessNum < 1 || guessNum > 10) { api.sendMessage("🔢 خمّن رقماً بين 1 و 10\nمثال: كينو تخمين 7", threadID, messageID); }
+else {
+  const guessData = await getUserData(senderID);
+  const guessReward = 300;
+  if (guessNum === secretNum) {
+    await addMoney(senderID, guessReward);
+    api.sendMessage(`🎯 أحسنت! الرقم كان ${secretNum}\n💰 ربحت ${guessReward} $!`, threadID, messageID);
+  } else {
+    api.sendMessage(`❌ خطأ! الرقم كان ${secretNum} وليس ${guessNum}\nحاول مجدداً!`, threadID, messageID);
+  }
+}
+
+// [أمر: صح أو خطأ / true false / سؤال]
+const triviaQuestions = [
+  { q: "الشمس تشرق من الغرب؟", a: false },
+  { q: "العرب اخترعوا الأرقام المستخدمة حالياً؟", a: true },
+  { q: "القطة لها 7 أرواح حقيقياً؟", a: false },
+  { q: "الذهب يمكن أن يذوب؟", a: true },
+  { q: "الماء يغلي عند 100 درجة على مستوى سطح البحر؟", a: true },
+  { q: "بغداد عاصمة إيران؟", a: false },
+  { q: "القرآن الكريم نزل على 23 سنة؟", a: true },
+  { q: "الفيل أكبر حيوان بري في العالم؟", a: true }
+];
+const trivQ = triviaQuestions[Math.floor(Math.random() * triviaQuestions.length)];
+const userAnswer = args[1]?.toLowerCase();
+if (!userAnswer) {
+  api.sendMessage(`❓ ${trivQ.q}\n\nأجب: كينو صح أو خطأ صح\n          كينو صح أو خطأ خطأ`, threadID, messageID);
+} else {
+  const isCorrect = (userAnswer === "صح" || userAnswer === "true") === trivQ.a;
+  await ensureUser(senderID);
+  if (isCorrect) {
+    await addMoney(senderID, 200);
+    api.sendMessage(`✅ إجابة صحيحة!\n💰 +200 $`, threadID, messageID);
+  } else {
+    api.sendMessage(`❌ إجابة خاطئة!\nالإجابة الصحيحة: ${trivQ.a ? "صح" : "خطأ"}`, threadID, messageID);
+  }
+}
+
+// [أمر: ورق حجر مقص / rock paper scissors]
+await ensureUser(senderID);
+const rpsChoice = args[1];
+const rpsOptions = ["ورق", "حجر", "مقص"];
+const rpsEmojis = { "ورق": "📄", "حجر": "🪨", "مقص": "✂️" };
+if (!rpsOptions.includes(rpsChoice)) { api.sendMessage("✂️ اختر: ورق | حجر | مقص\nمثال: كينو ورق حجر مقص ورق", threadID, messageID); }
+else {
+  const rpsBotChoice = rpsOptions[Math.floor(Math.random() * 3)];
+  const rpsWins = { "ورق": "حجر", "حجر": "مقص", "مقص": "ورق" };
+  const rpsBet2 = 200;
+  let rpsResult = "";
+  if (rpsChoice === rpsBotChoice) { rpsResult = "🤝 تعادل!"; }
+  else if (rpsWins[rpsChoice] === rpsBotChoice) {
+    await addMoney(senderID, rpsBet2);
+    rpsResult = `🎉 فزت! +${rpsBet2} $`;
+  } else {
+    await removeMoney(senderID, rpsBet2);
+    rpsResult = `❌ خسرت! -${rpsBet2} $`;
+  }
+  api.sendMessage(`${rpsEmojis[rpsChoice]} أنت vs البوت ${rpsEmojis[rpsBotChoice]}\n\n${rpsResult}`, threadID, messageID);
+}
+
+// [أمر: قلاب عملة / coin flip / طرح أو مكتوب]
+await ensureUser(senderID);
+const coinBet = parseInt(args.find(a => /^\d+$/.test(a))) || 100;
+const coinChoice2 = args.find(a => ["طرح","مكتوب","heads","tails"].includes(a.toLowerCase()));
+const coinData = await getUserData(senderID);
+if (coinBet > (coinData?.currency?.money ?? 0)) { api.sendMessage("❌ رصيدك غير كافٍ", threadID, messageID); }
+else if (!coinChoice2) { api.sendMessage("🪙 اختر: طرح أو مكتوب\nمثال: كينو قلاب عملة 500 طرح", threadID, messageID); }
+else {
+  const coinResult = Math.random() > 0.5 ? "طرح" : "مكتوب";
+  const coinEmoji = coinResult === "طرح" ? "🦅" : "👑";
+  const coinNorm = coinChoice2.toLowerCase() === "heads" ? "طرح" : coinChoice2.toLowerCase() === "tails" ? "مكتوب" : coinChoice2;
+  if (coinNorm === coinResult) {
+    await addMoney(senderID, coinBet);
+    api.sendMessage(`🪙 قلاب العملة!\n\nالنتيجة: ${coinResult} ${coinEmoji}\n\n✅ فزت بـ ${coinBet.toLocaleString()} $!`, threadID, messageID);
+  } else {
+    await removeMoney(senderID, coinBet);
+    api.sendMessage(`🪙 قلاب العملة!\n\nالنتيجة: ${coinResult} ${coinEmoji}\n\n❌ خسرت ${coinBet.toLocaleString()} $`, threadID, messageID);
+  }
+}
+
+// [أمر: يانصيب / lottery / الجائزة الكبرى]
+await ensureUser(senderID);
+const lotteryTicket = 1000;
+const lotteryData = await getUserData(senderID);
+if ((lotteryData?.currency?.money ?? 0) < lotteryTicket) { api.sendMessage(`❌ تذكرة اليانصيب تكلف ${lotteryTicket} $`, threadID, messageID); }
+else {
+  await removeMoney(senderID, lotteryTicket);
+  const lotteryNumbers = Array.from({length:6}, () => Math.floor(Math.random()*49)+1);
+  const yourNumbers = Array.from({length:6}, () => Math.floor(Math.random()*49)+1);
+  const matches = yourNumbers.filter(n => lotteryNumbers.includes(n)).length;
+  const lotteryPrizes = [0, 0, 500, 2000, 10000, 50000, 1000000];
+  const prize = lotteryPrizes[matches] || 0;
+  if (prize > 0) await addMoney(senderID, prize);
+  api.sendMessage(`🎟️ اليانصيب!\n\nأرقامك: ${yourNumbers.join(" - ")}\nالأرقام الفائزة: ${lotteryNumbers.join(" - ")}\n\nتطابقات: ${matches}/6\n${prize > 0 ? `🎉 ربحت ${prize.toLocaleString()} $!` : "❌ لم تربح هذه المرة"}`, threadID, messageID);
+}
+
+// [أمر: بلاك جاك / blackjack / 21]
+await ensureUser(senderID);
+const bjBet = parseInt(args.find(a => /^\d+$/.test(a))) || 500;
+const bjData = await getUserData(senderID);
+if (bjBet > (bjData?.currency?.money ?? 0)) { api.sendMessage("❌ رصيدك غير كافٍ", threadID, messageID); }
+else {
+  const bjCards = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+  const bjValues = { "A":11,"2":2,"3":3,"4":4,"5":5,"6":6,"7":7,"8":8,"9":9,"10":10,"J":10,"Q":10,"K":10 };
+  const dealCard = () => bjCards[Math.floor(Math.random() * bjCards.length)];
+  const calcHand = (hand) => {
+    let total = hand.reduce((s,c) => s + (bjValues[c]||0), 0);
+    let aces = hand.filter(c => c === "A").length;
+    while (total > 21 && aces > 0) { total -= 10; aces--; }
+    return total;
+  };
+  const playerHand = [dealCard(), dealCard()];
+  const dealerHand = [dealCard(), dealCard()];
+  const playerTotal = calcHand(playerHand);
+  const dealerTotal = calcHand(dealerHand);
+  let bjResult = "";
+  if (playerTotal === 21) {
+    const win21 = Math.floor(bjBet * 2.5);
+    await addMoney(senderID, win21 - bjBet);
+    bjResult = `🎊 بلاك جاك! ربحت ${win21.toLocaleString()} $`;
+  } else if (dealerTotal > 21 || playerTotal > dealerTotal) {
+    await addMoney(senderID, bjBet);
+    bjResult = `✅ فزت! +${bjBet.toLocaleString()} $`;
+  } else if (playerTotal === dealerTotal) {
+    bjResult = `🤝 تعادل! استرددت رهانك`;
+  } else {
+    await removeMoney(senderID, bjBet);
+    bjResult = `❌ خسرت ${bjBet.toLocaleString()} $`;
+  }
+  api.sendMessage(`🃏 بلاك جاك!\n\nيدك: ${playerHand.join(" ")} = ${playerTotal}\nالديلر: ${dealerHand[0]} ?\n\n${bjResult}`, threadID, messageID);
+}
+
+// [أمر: لعبة الأرقام / number game / خمن الأرقام]
+const numGame = Math.floor(Math.random() * 100) + 1;
+const numGuess = parseInt(args[1]);
+if (!numGuess) { api.sendMessage(`🔢 خمّن رقماً بين 1 و 100!\nمثال: كينو لعبة الأرقام 42`, threadID, messageID); }
+else {
+  await ensureUser(senderID);
+  if (numGuess === numGame) {
+    await addMoney(senderID, 1000);
+    api.sendMessage(`🎯 ممتاز! الرقم كان ${numGame}!\n💰 +1000 $`, threadID, messageID);
+  } else if (Math.abs(numGuess - numGame) <= 5) {
+    await addMoney(senderID, 200);
+    api.sendMessage(`🔥 قريب جداً! الرقم كان ${numGame}\n💰 +200 $ للقرب`, threadID, messageID);
+  } else {
+    const hint = numGuess < numGame ? "⬆️ أكبر" : "⬇️ أصغر";
+    api.sendMessage(`❌ خطأ! ${hint} من ${numGuess}\nالرقم الصحيح: ${numGame}`, threadID, messageID);
+  }
+}
+
+// [أمر: لعبة الكلمات / word game / حروف]
+const wordChallenges = ["حيوان يبدأ بحرف ك","دولة عربية","فاكهة","مهنة","لون","جزيرة","نهر","جبل"];
+const challenge = wordChallenges[Math.floor(Math.random() * wordChallenges.length)];
+const wordAnswer = args.slice(1).join(" ");
+if (!wordAnswer) { api.sendMessage(`🔤 التحدي: ${challenge}\nأجب: كينو لعبة الكلمات [إجابتك]`, threadID, messageID); }
+else {
+  await ensureUser(senderID);
+  await addMoney(senderID, 150);
+  api.sendMessage(`✅ إجابتك: ${wordAnswer}\n💰 +150 $ مكافأة المشاركة!`, threadID, messageID);
+}
+
+// [أمر: سباق / race / منافسة]
+const raceTarget = Object.keys(mentions)[0];
+if (!raceTarget) { api.sendMessage("🏎️ منشن شخصاً للسباق معه!", threadID, messageID); }
+else {
+  await ensureUser(senderID);
+  await ensureUser(raceTarget);
+  const raceBet2 = parseInt(args.find(a => /^\d+$/.test(a))) || 500;
+  const p1Speed = Math.floor(Math.random() * 100) + 1;
+  const p2Speed = Math.floor(Math.random() * 100) + 1;
+  const raceEmojis = ["🏎️","🚗","🚕","🚙","🚌"];
+  const car1 = raceEmojis[Math.floor(Math.random() * raceEmojis.length)];
+  const car2 = raceEmojis[Math.floor(Math.random() * raceEmojis.length)];
+  let raceMsg = `🏁 السباق بدأ!\n\n${car1} أنت: ${p1Speed} كم/س\n${car2} المنافس: ${p2Speed} كم/س\n\n`;
+  if (p1Speed > p2Speed) {
+    await removeMoney(raceTarget, raceBet2);
+    await addMoney(senderID, raceBet2);
+    raceMsg += `🏆 فزت! +${raceBet2.toLocaleString()} $`;
+  } else if (p2Speed > p1Speed) {
+    await removeMoney(senderID, raceBet2);
+    await addMoney(raceTarget, raceBet2);
+    raceMsg += `❌ خسرت! -${raceBet2.toLocaleString()} $`;
+  } else {
+    raceMsg += `🤝 تعادل!`;
+  }
+  api.sendMessage(raceMsg, threadID, messageID);
+}
+
+══════════════════════════════════════════
+ ٥. ألعاب تفاعلية — INTERACTIVE GAMES
+══════════════════════════════════════════
+
+// [أمر: من سيفوز / who wins / تنبؤ]
+const infoWhoWins = await api.getThreadInfo(threadID);
+const candidates = infoWhoWins.participantIDs;
+const winner = candidates[Math.floor(Math.random() * candidates.length)];
+const winnerChance = Math.floor(Math.random() * 60) + 40;
+api.sendMessage(`🏆 المتنبئ الآلي يقول:\n\nالفائز هو: ${winner}\nنسبة الفوز: ${winnerChance}%\n\n(هذا للترفيه فقط 😄)`, threadID, messageID);
+
+// [أمر: من الأقوى / strongest]
+const infoStrong = await api.getThreadInfo(threadID);
+const strongWinner = infoStrong.participantIDs[Math.floor(Math.random() * infoStrong.participantIDs.length)];
+const power = Math.floor(Math.random() * 9000) + 1000;
+api.sendMessage(`💪 أقوى شخص في المجموعة:\n\n👤 ${strongWinner}\n⚡ القوة: ${power.toLocaleString()}\n\n(نتيجة عشوائية للترفيه 😄)`, threadID, messageID);
+
+// [أمر: من المجنون / craziest]
+const infoCrazy = await api.getThreadInfo(threadID);
+const crazyPerson = infoCrazy.participantIDs[Math.floor(Math.random() * infoCrazy.participantIDs.length)];
+const crazyLevel = Math.floor(Math.random() * 100);
+api.sendMessage(`🤪 أجنّ شخص في المجموعة اليوم:\n\n👤 ${crazyPerson}\n🌡️ مستوى الجنون: ${crazyLevel}%`, threadID, messageID);
+
+// [أمر: من المحظوظ / luckiest / الحظ]
+const infoLucky = await api.getThreadInfo(threadID);
+const luckyPerson = infoLucky.participantIDs[Math.floor(Math.random() * infoLucky.participantIDs.length)];
+const luck = Math.floor(Math.random() * 100);
+api.sendMessage(`🍀 المحظوظ اليوم:\n\n👤 ${luckyPerson}\n🌟 نسبة الحظ: ${luck}%`, threadID, messageID);
+
+// [أمر: شخصية اليوم / personality / من أنت]
+const personalities = ["🦁 القائد الجسور","🦊 الذكي الماكر","🐝 المجتهد المثابر","🦋 الرومانسي الحالم","🐯 المحارب الشجاع","🦅 الحر المستقل","🐬 الودود المرح"];
+const targetPers = Object.keys(mentions)[0] || senderID;
+const randomPers = personalities[Math.floor(Math.random() * personalities.length)];
+api.sendMessage(`🎭 شخصية ${targetPers} اليوم:\n\n${randomPers}\n\n(للترفيه فقط 😄)`, threadID, messageID);
+
+// [أمر: توافق / compatibility / كيمياء]
+const comp1 = Object.keys(mentions)[0] || senderID;
+const comp2 = Object.keys(mentions)[1] || messageReply?.senderID;
+if (!comp2) { api.sendMessage("❤️ منشن شخصين للتحقق من التوافق", threadID, messageID); }
+else {
+  const compat = Math.floor(Math.random() * 101);
+  const compatEmoji = compat >= 80 ? "💕" : compat >= 60 ? "❤️" : compat >= 40 ? "💛" : compat >= 20 ? "🤝" : "💔";
+  api.sendMessage(`${compatEmoji} نسبة التوافق:\n\n👤 ${comp1}\n💞 مع 💞\n👤 ${comp2}\n\nالنتيجة: ${compat}% ${compatEmoji}`, threadID, messageID);
+}
+
+// [أمر: تفاله / stupid / إيه أغبى]
+const stupidTarget = Object.keys(mentions)[0] || senderID;
+const stupidLvl = Math.floor(Math.random() * 100);
+api.sendMessage(`🤦 مستوى الغباء لـ ${stupidTarget}: ${stupidLvl}%\n\n${stupidLvl > 80 ? "😂 الله يعين اللي حوله!" : stupidLvl > 50 ? "🤔 وسط وسط" : "😊 ذكي بالحمد لله"}`, threadID, messageID);
+
+// [أمر: ذكاء / iq / نسبة الذكاء]
+const iqTarget = Object.keys(mentions)[0] || senderID;
+const iqScore = Math.floor(Math.random() * 100) + 60;
+const iqLevel = iqScore >= 140 ? "عبقري 🧠" : iqScore >= 120 ? "فوق المتوسط 🌟" : iqScore >= 100 ? "متوسط 📊" : iqScore >= 80 ? "دون المتوسط 😅" : "يحتاج مساعدة 💙";
+api.sendMessage(`🧠 نسبة ذكاء ${iqTarget}:\n\nIQ: ${iqScore}\nالمستوى: ${iqLevel}`, threadID, messageID);
+
+// [أمر: بخت / luck score / نصيب]
+const luckTarget = Object.keys(mentions)[0] || senderID;
+const luckScore = Math.floor(Math.random() * 100);
+const luckMsg = luckScore >= 80 ? "حظك اليوم ذهب! 🌟" : luckScore >= 60 ? "حظ جيد 👍" : luckScore >= 40 ? "حظ عادي 🌤️" : luckScore >= 20 ? "حذار اليوم ⚠️" : "ابقَ في البيت! 😂";
+api.sendMessage(`🍀 حظ ${luckTarget} اليوم:\n\n${luckScore}% — ${luckMsg}`, threadID, messageID);
+
+// [أمر: مبارزة / duel / قتال]
+const duelTarget = Object.keys(mentions)[0];
+if (!duelTarget) { api.sendMessage("⚔️ منشن خصمك للمبارزة!", threadID, messageID); }
+else {
+  await ensureUser(senderID);
+  await ensureUser(duelTarget);
+  const p1Hp = Math.floor(Math.random() * 50) + 50;
+  const p2Hp = Math.floor(Math.random() * 50) + 50;
+  const p1Atk = Math.floor(Math.random() * 30) + 10;
+  const p2Atk = Math.floor(Math.random() * 30) + 10;
+  const duelBet3 = 500;
+  let duelLog = `⚔️ المبارزة!\n\n💪 ${senderID} vs ${duelTarget}\n\nصحة: ${p1Hp} vs ${p2Hp}\nهجوم: ${p1Atk} vs ${p2Atk}\n\n`;
+  if (p1Hp + p1Atk > p2Hp + p2Atk) {
+    await addMoney(senderID, duelBet3);
+    await removeMoney(duelTarget, duelBet3);
+    duelLog += `🏆 فزت بالمبارزة! +${duelBet3} $`;
+  } else {
+    await removeMoney(senderID, duelBet3);
+    await addMoney(duelTarget, duelBet3);
+    duelLog += `❌ خسرت المبارزة! -${duelBet3} $`;
+  }
+  api.sendMessage(duelLog, threadID, messageID);
+}
+
+══════════════════════════════════════════
+ ٦. الترفيه — ENTERTAINMENT
+══════════════════════════════════════════
+
+// [أمر: نكتة / joke / اضحك]
+const jokes = [
+  "طالب لأستاذه: دكتور، عندي سؤال\nالأستاذ: اسأل\nالطالب: هل يجوز للإنسان أن يعاقَب بسبب شيء لم يفعله؟\nالأستاذ: طبعاً لا!\nالطالب: الحمد لله، أنا ما سويت الواجب 😂",
+  "واحد عند الطبيب:\nالطبيب: كيف نومك؟\nهو: زين بس أخوي يصحيني\nالطبيب: ليش؟\nهو: عشان أروح أنام 😂",
+  "معلمة للتلاميذ: من يعطيني جملة فيها كلمة أمس؟\nتلميذ: أمس أكلت سمك\nالمعلمة: ممتاز! ومن يعطيني جملة فيها كلمة غد؟\nتلميذ آخر: غد أكلت سمك 😂",
+  "أب لابنه: درجاتك؟\nالابن: غرقت 😂\nالأب: غرقت في الدراسة؟\nالابن: لا، الأوراق وقعت في الماء",
+  "واحد يكلم صاحبه بالهاتف:\nالصاحب: أنت فين؟\nهو: عند البيت\nالصاحب: جوا أو برا؟\nهو: بين بين، عند الباب 😂"
+];
+const randomJoke = jokes[Math.floor(Math.random() * jokes.length)];
+api.sendMessage(`😂 نكتة اليوم:\n\n${randomJoke}`, threadID, messageID);
+
+// [أمر: توقعات / horoscope / برج]
+const targetHoro = Object.keys(mentions)[0] || senderID;
+const horoscopeTexts = [
+  "⭐ النجوم تقول: يوم مميز ينتظرك، الحظ في صفك",
+  "🌙 القمر يشير: تحذر من قرارات متسرعة اليوم",
+  "☀️ الشمس تبشّر: مفاجأة سعيدة في الطريق",
+  "🌟 النجوم تنصح: اغتنم الفرص ولا تتردد",
+  "💫 الكون يقول: الصبر مفتاح الفرج",
+  "🔮 التوقع: تغيير إيجابي كبير قريب جداً"
+];
+const randomHoro = horoscopeTexts[Math.floor(Math.random() * horoscopeTexts.length)];
+api.sendMessage(`🔮 توقعات ${targetHoro} اليوم:\n\n${randomHoro}\n\n(للترفيه فقط)`, threadID, messageID);
+
+// [أمر: شعر / poem / قصيدة]
+const poems = [
+  "في عينيك ألف سؤال\nوفي صمتك ألف جواب\nأنت سر الكون كله\nوأنا ما زلت أبحث في الكتاب",
+  "الوقت كالسيف إن لم تقطعه\nقطعك وفي لحظة ضاع عمرك\nفاغتنم يومك قبل ليلك\nوليلك قبل أن يفجر صبحك",
+  "كن كالنخيل يشمخ في الفلا\nلا تنحني للريح والأعاصير\nإن الكريم يعلو فوق كل بلا\nوالصابر الجميل يحمد العواقب",
+  "في زحمة الحياة تذكّر:\nأن هناك من ينتظر ابتسامتك\nأن هناك قلباً يبحث عنك\nفلا تبخل بكلمة طيبة"
+];
+const randomPoem = poems[Math.floor(Math.random() * poems.length)];
+api.sendMessage(`📜 شعر:\n\n${randomPoem}`, threadID, messageID);
+
+// [أمر: اقتباس / quote / حكمة]
+const quotes = [
+  "💡 'النجاح ليس نهائياً، والفشل ليس قاتلاً، الشجاعة هي ما يهم' — وينستون تشرشل",
+  "🌟 'الفرصة لا تأتي مرتين، استغلها أو تندم' — حكمة عربية",
+  "💪 'ما لم يقتلك يجعلك أقوى' — نيتشه",
+  "🧠 'العلم بلا عمل كالشجرة بلا ثمر' — حكمة إسلامية",
+  "🔑 'كل المشكلات تملك حلولاً، فقط لا ترفع يدك قبل الأوان'",
+  "🌈 'بعد كل عاصفة تأتي قوس قزح، بعد كل ليل يأتي النهار'",
+  "⚡ 'الإنسان عدو ما جهل وصديق ما يعلم' — علي بن أبي طالب"
+];
+const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+api.sendMessage(randomQuote, threadID, messageID);
+
+// [أمر: طالعك / fortune / حظك اليوم]
+const fortunes = [
+  "🌟 اليوم يوم مبارك! ستحقق إنجازاً مهماً",
+  "⚠️ احذر اليوم من قرارات متسرعة",
+  "💰 المال سيأتيك من مصدر غير متوقع",
+  "❤️ قريباً ستلتقي بشخص مميز يغير حياتك",
+  "📚 التعلم اليوم سيثمر غداً، استثمر وقتك",
+  "🤝 صديق قديم سيعود إلى حياتك",
+  "🚀 فرصة كبيرة في الأفق، كن مستعداً!"
+];
+const randomFortune = fortunes[Math.floor(Math.random() * fortunes.length)];
+api.sendMessage(`🔮 طالعك اليوم:\n\n${randomFortune}\n\n(للترفيه فقط 😄)`, threadID, messageID);
+
+// [أمر: اسألني / 8ball / سؤال السحر]
+const question = args.slice(1).join(" ");
+if (!question) { api.sendMessage("🎱 اسألني أي سؤال!\nمثال: كينو اسألني هل سأنجح في الامتحان؟", threadID, messageID); }
+else {
+  const ball8Answers = [
+    "✅ نعم بكل تأكيد!", "✅ الإشارات تقول نعم", "✅ احتمال كبير جداً",
+    "🤔 من المحتمل", "🤔 ليس واضحاً الآن", "🤔 أعد السؤال",
+    "❌ لا تعتمد على ذلك", "❌ الإجابة لا", "❌ كل الدلائل تقول لا"
+  ];
+  const ball8 = ball8Answers[Math.floor(Math.random() * ball8Answers.length)];
+  api.sendMessage(`🎱 سؤالك: ${question}\n\n${ball8}`, threadID, messageID);
+}
+
+// [أمر: رأي / opinion / ما رأيك]
+const opinionTopic = args.slice(1).join(" ");
+if (!opinionTopic) { api.sendMessage("💭 اكتب الموضوع\nمثال: كينو رأي الدراسة", threadID, messageID); }
+else {
+  const opinions = [
+    `💭 رأيي في "${opinionTopic}": موضوع مثير للجدل يستحق التأمل`,
+    `🤔 "${opinionTopic}": لكل وجهة نظر، والحكمة في التوازن`,
+    `💡 "${opinionTopic}": من أفضل المواضيع للنقاش البنّاء`,
+    `⚖️ "${opinionTopic}": له إيجابيات وسلبيات، الأمر يعتمد على السياق`
+  ];
+  api.sendMessage(opinions[Math.floor(Math.random() * opinions.length)], threadID, messageID);
+}
+
+// [أمر: عيد ميلاد / happy birthday / تهنئة]
+const bdayTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+const bdayMsg = `🎂🎉 كل عام وأنت بخير! 🎉🎂\n\nأتمنى لك يا ${bdayTarget}:\n🌟 عاماً مليئاً بالسعادة\n💰 ورزقاً واسعاً\n❤️ وصحة دائمة\n\n🎈🎁🎊 Happy Birthday! 🎊🎁🎈`;
+api.sendMessage(bdayMsg, threadID, messageID);
+
+// [أمر: مدح / praise / اطرِ]
+const praiseTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+const praises = [
+  `🌟 ${praiseTarget} أنت شخص رائع ومميز! نعم من يعرفك`,
+  `💎 ${praiseTarget} قلبك من ذهب وعقلك من ماس!`,
+  `🦁 ${praiseTarget} أنت قوي وشجاع، عاش من يشبهك!`,
+  `🌈 ${praiseTarget} وجودك في المجموعة يضيف بهجة وسعادة!`
+];
+api.sendMessage(praises[Math.floor(Math.random() * praises.length)], threadID, messageID);
+
+// [أمر: شتم / roast / هجاء]
+const roastTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+const roasts = [
+  `😂 ${roastTarget} وجهه يشبه الخريطة التي ما أحد يفهمها!`,
+  `🤣 ${roastTarget} لما يتكلم الكل يتفق على الصمت 😂`,
+  `😅 ${roastTarget} حتى المرآة تغمض عينيها لما يمر أمامها!`,
+  `😂 ${roastTarget} ذكاؤه تحميل بطيء والإشارة ضعيفة!`
+];
+api.sendMessage(`${roasts[Math.floor(Math.random() * roasts.length)]}\n\n(بالمزاح فقط 😄 لا تزعل!)`, threadID, messageID);
+
+══════════════════════════════════════════
+ ٧. معلومات ومساعدة — INFO & HELP
+══════════════════════════════════════════
+
+// [أمر: بروفايل / profile / ملف]
+const profileTarget = Object.keys(mentions)[0] || messageReply?.senderID || senderID;
+await ensureUser(profileTarget);
+const profData = await getUserData(profileTarget);
+const profMoney = profData?.currency?.money ?? 0;
+const profExp   = profData?.currency?.exp ?? 0;
+const profLvl   = profData?.currency?.level ?? 1;
+const profRank  = profData?.currency?.rank ?? "مبتدئ";
+const profMsgs  = profData?.currency?.messageCount ?? 0;
+const profileMsg = `👤 ━━ الملف الشخصي ━━ 👤\n\n🆔 ID: ${profileTarget}\n💵 الرصيد: ${profMoney.toLocaleString()} $\n⭐ XP: ${profExp.toLocaleString()}\n📊 المستوى: ${profLvl}\n🏅 الرتبة: ${profRank}\n💬 الرسائل: ${profMsgs.toLocaleString()}`;
+api.sendMessage(profileMsg, threadID, messageID);
+
+// [أمر: ترتيب المستويات / levels / مستويات]
+const levelsText = `📊 ━━ نظام المستويات ━━ 📊\n\n` +
+  `مستوى 1-5: مبتدئ 🌱\n` +
+  `مستوى 6-10: متعلم 📚\n` +
+  `مستوى 11-20: متقدم ⭐\n` +
+  `مستوى 21-30: خبير 💫\n` +
+  `مستوى 31-50: محترف 💎\n` +
+  `مستوى 51-75: أسطورة 🔥\n` +
+  `مستوى 76-99: ملك 👑\n` +
+  `مستوى 100: إله ⚡`;
+api.sendMessage(levelsText, threadID, messageID);
+
+// [أمر: مساعدة / help / أوامر]
+const helpMsg = `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗔𝗜 𝗨𝗟𝗧𝗥𝗔 ━━ ⌬\n\n` +
+  `🏠 إدارة الكروب:\n• اطرد المنشن | رقّ المنشن | قفل/فتح\n• غير اسم الكروب [اسم] | غير إيموجي\n\n` +
+  `💰 الاقتصاد:\n• رصيدي | عمل | يومي | أسبوعي\n• سرق المنشن | حول [مبلغ] المنشن\n• بنك إيداع/سحب [مبلغ] | مشروع\n\n` +
+  `🎮 الألعاب:\n• روليت [مبلغ] | سلوت [مبلغ]\n• نرد [مبلغ] [1-6] | قلاب عملة\n• يانصيب | بلاك جاك | مبارزة\n• ورق حجر مقص [اختيار]\n\n` +
+  `🎭 ترفيه:\n• نكتة | شعر | حكمة | طالعك\n• اسألني [سؤال] | مدح المنشن\n• توافق [@1] [@2] | من المحظوظ\n\n` +
+  `⚙️ النظام:\n• بياناتك | قائمة | شغل [اسم]\n• كينو [طلب] احفظ باسم [اسم]`;
+api.sendMessage(helpMsg, threadID, messageID);
+
+// [أمر: ping / بينغ / استجابة]
+const startTime = Date.now();
+api.sendMessage(`🏓 Pong!\n⚡ الاستجابة: ${Date.now() - startTime}ms\n✅ البوت يعمل بشكل طبيعي`, threadID, messageID);
+
+// [أمر: وقت / time / الساعة]
+const nowTime = new Date();
+const timeStr = nowTime.toLocaleString("ar-IQ", { timeZone: "Asia/Baghdad", hour12: true });
+api.sendMessage(`🕐 الوقت الحالي:\n\n${timeStr}\n\n🌍 التوقيت: بغداد (UTC+3)`, threadID, messageID);
+
+// [أمر: تاريخ / date / اليوم]
+const nowDate = new Date();
+const days = ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+const months = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+const dateStr = `${days[nowDate.getDay()]}، ${nowDate.getDate()} ${months[nowDate.getMonth()]} ${nowDate.getFullYear()}`;
+api.sendMessage(`📅 التاريخ اليوم:\n\n${dateStr}`, threadID, messageID);
+
+// [أمر: ID / معرف / هويتي]
+api.sendMessage(`🆔 معلوماتك:\n\n👤 ID: ${senderID}\n💬 Thread ID: ${threadID}`, threadID, messageID);
+
+// [أمر: bot ID / معرف البوت]
+const botID = api.getCurrentUserID();
+api.sendMessage(`🤖 معلومات البوت:\n\n🆔 ID: ${botID}\n✅ يعمل بشكل طبيعي`, threadID, messageID);
+
+══════════════════════════════════════════
+ ٨. أوامر إدارية متقدمة — ADVANCED ADMIN
+══════════════════════════════════════════
+
+// [أمر: احظر / ban / حظر]
+const banTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+const banReason = args.filter(a => !a.includes("@")).slice(1).join(" ") || "مخالفة القواعد";
+if (!banTarget) { api.sendMessage("❌ منشن شخصاً", threadID, messageID); }
+else {
+  await api.removeUserFromGroup(banTarget, threadID);
+  api.sendMessage(`🚫 تم حظر ${banTarget}\n📌 السبب: ${banReason}`, threadID, messageID);
+}
+
+// [أمر: تحذير / warn / warning]
+const warnTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+const warnReason = args.filter(a => !a.includes("@")).slice(1).join(" ") || "سلوك غير لائق";
+if (!warnTarget) { api.sendMessage("❌ منشن شخصاً", threadID, messageID); }
+else {
+  await ensureUser(warnTarget);
+  const warnData = await getUserData(warnTarget);
+  const currentWarns = (warnData?.currency?.warns ?? 0) + 1;
+  await updateUserData(warnTarget, { warns: currentWarns });
+  if (currentWarns >= 3) {
+    await api.removeUserFromGroup(warnTarget, threadID);
+    api.sendMessage(`⛔ تم طرد ${warnTarget} بعد ${currentWarns} تحذيرات!\n📌 السبب الأخير: ${warnReason}`, threadID, messageID);
+  } else {
+    api.sendMessage(`⚠️ تحذير للمستخدم ${warnTarget}\n📌 السبب: ${warnReason}\n🔢 التحذير: ${currentWarns}/3\n${currentWarns === 2 ? "⛔ تحذير أخير قبل الطرد!" : ""}`, threadID, messageID);
+  }
+}
+
+// [أمر: تحذيرات / warns / عدد التحذيرات]
+const checksWarnTarget = Object.keys(mentions)[0] || messageReply?.senderID || senderID;
+await ensureUser(checksWarnTarget);
+const checksWarnData = await getUserData(checksWarnTarget);
+const checksWarns = checksWarnData?.currency?.warns ?? 0;
+api.sendMessage(`⚠️ تحذيرات ${checksWarnTarget}:\n\n🔢 ${checksWarns}/3 تحذير${checksWarns === 0 ? "\n✅ سجل نظيف!" : checksWarns >= 3 ? "\n⛔ يستحق الطرد!" : ""}`, threadID, messageID);
+
+// [أمر: مسح تحذيرات / clear warns / reset warns]
+const clearWarnTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+if (!clearWarnTarget) { api.sendMessage("❌ منشن شخصاً", threadID, messageID); }
+else {
+  await ensureUser(clearWarnTarget);
+  await updateUserData(clearWarnTarget, { warns: 0 });
+  api.sendMessage(`✅ تم مسح تحذيرات ${clearWarnTarget}`, threadID, messageID);
+}
+
+// [أمر: إعلان / announce / نشرة]
+const announceMsg = args.slice(1).join(" ");
+if (!announceMsg) { api.sendMessage("❌ اكتب نص الإعلان", threadID, messageID); }
+else {
+  const announcement = `📢 ━━ إعلان رسمي ━━ 📢\n\n${announceMsg}\n\n━━━━━━━━━━━━━━━\n📅 ${new Date().toLocaleDateString("ar")}`;
+  api.sendMessage(announcement, threadID, messageID);
+}
+
+// [أمر: تذكير / reminder / نذكر]
+const reminderMin = parseInt(args[1]) || 5;
+const reminderMsg = args.slice(2).join(" ") || "تذكير مهم!";
+api.sendMessage(`⏰ سأذكرك بـ "${reminderMsg}" بعد ${reminderMin} دقيقة`, threadID, messageID);
+setTimeout(() => api.sendMessage(`🔔 تذكير: ${reminderMsg}`, threadID, messageID), reminderMin * 60000);
+
+// [أمر: استطلاع / poll / تصويت]
+const pollQuestion = args.slice(1).join(" ");
+if (!pollQuestion) { api.sendMessage("📊 اكتب سؤال الاستطلاع\nمثال: كينو استطلاع هل تحب الكروب؟", threadID, messageID); }
+else {
+  api.sendMessage(`📊 ━━ استطلاع ━━ 📊\n\n❓ ${pollQuestion}\n\n👍 موافق — تفاعل بـ ❤️\n👎 غير موافق — تفاعل بـ 😡`, threadID, messageID);
+}
+
+// [أمر: قواعد / rules / أحكام]
+const rulesMsg = `📋 ━━ قواعد المجموعة ━━ 📋\n\n1️⃣ الاحترام المتبادل بين الجميع\n2️⃣ ممنوع الشتم والإهانة\n3️⃣ ممنوع إرسال محتوى مسيء\n4️⃣ ممنوع الإزعاج والسبام\n5️⃣ اتباع تعليمات الإدارة\n\n⚠️ مخالفة القواعد = تحذير ثم طرد`;
+api.sendMessage(rulesMsg, threadID, messageID);
+
+// [أمر: ترحيب / welcome / مرحباً]
+const welcomeTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+const welcomeMsg = welcomeTarget
+  ? `🎉 أهلاً وسهلاً بـ ${welcomeTarget} في مجموعتنا!\n\nنتمنى لك وقتاً ممتعاً 🌟`
+  : `🎉 أهلاً بالجميع في مجموعتنا!\n\nنتمنى لكم وقتاً ممتعاً 🌟`;
+api.sendMessage(welcomeMsg, threadID, messageID);
+
+// [أمر: توديع / farewell / وداع]
+const farewellTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+api.sendMessage(`👋 وداعاً ${farewellTarget || "للجميع"}!\n\nشكراً لوجودك معنا، أتمنى أن نلتقي مجدداً 🌟`, threadID, messageID);
+
+══════════════════════════════════════════
+ ٩. الذكاء الاصطناعي والمعالجة — AI TOOLS
+══════════════════════════════════════════
+
+// [أمر: ترجم / translate / ترجمة]
+const translateText = messageReply?.body || args.slice(1).join(" ");
+const targetLang = args[1] || "en";
+if (!translateText) { api.sendMessage("❌ رد على رسالة أو اكتب النص", threadID, messageID); }
+else {
+  const translateRes = await axios.get(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(translateText)}&langpair=ar|${targetLang}`);
+  const translated = translateRes.data.responseData.translatedText;
+  api.sendMessage(`🌍 الترجمة:\n\n${translated}`, threadID, messageID);
+}
+
+// [أمر: اختصار / shorten url / رابط قصير]
+const urlToShorten = args[1] || messageReply?.body;
+if (!urlToShorten || !urlToShorten.startsWith("http")) { api.sendMessage("❌ أعطِ رابطاً صحيحاً", threadID, messageID); }
+else {
+  try {
+    const shortenRes = await axios.get(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(urlToShorten)}`);
+    api.sendMessage(`🔗 الرابط المختصر:\n\n${shortenRes.data}`, threadID, messageID);
+  } catch(e) {
+    api.sendMessage("❌ فشل اختصار الرابط", threadID, messageID);
+  }
+}
+
+// [أمر: طقس / weather / جو]
+const city = args.slice(1).join(" ") || "بغداد";
+try {
+  const weatherRes = await axios.get(`https://wttr.in/${encodeURIComponent(city)}?format=3&lang=ar`);
+  api.sendMessage(`🌤️ حالة الطقس في ${city}:\n\n${weatherRes.data}`, threadID, messageID);
+} catch(e) {
+  api.sendMessage(`❌ لم يتم العثور على بيانات الطقس لـ ${city}`, threadID, messageID);
+}
+
+// [أمر: حاسبة / calculate / احسب]
+const calcExpr = args.slice(1).join(" ").replace(/[^0-9+\-*/().% ]/g, "");
+if (!calcExpr) { api.sendMessage("🧮 اكتب العملية الحسابية\nمثال: كينو احسب 150 * 3 + 50", threadID, messageID); }
+else {
+  try {
+    const calcResult = eval(calcExpr);
+    api.sendMessage(`🧮 الحساب:\n\n${calcExpr} = ${calcResult}`, threadID, messageID);
+  } catch(e) {
+    api.sendMessage("❌ عملية حسابية غير صحيحة", threadID, messageID);
+  }
+}
+
+// [أمر: اسأل / ask / سؤال لـ AI]
+const aiQuestion = args.slice(1).join(" ");
+if (!aiQuestion) { api.sendMessage("❓ اكتب سؤالك\nمثال: كينو اسأل ما هو أعمق بحر في العالم؟", threadID, messageID); }
+else {
+  const aiAnswers = {
+    "أعمق بحر": "🌊 أعمق بحر هو البحر الكاريبي بعمق 7686 متر",
+    "أطول نهر": "🏞️ أطول نهر في العالم هو نهر النيل بطول 6650 كم",
+    "أكبر دولة": "🗺️ أكبر دولة في العالم مساحةً هي روسيا",
+    "عاصمة العراق": "🏛️ عاصمة العراق هي بغداد",
+    "عاصمة السعودية": "🏛️ عاصمة السعودية هي الرياض"
+  };
+  const foundAnswer = Object.entries(aiAnswers).find(([k]) => aiQuestion.includes(k));
+  if (foundAnswer) {
+    api.sendMessage(`💡 ${foundAnswer[1]}`, threadID, messageID);
+  } else {
+    api.sendMessage(`💡 سؤالك: ${aiQuestion}\n\nهذا سؤال جيد! للحصول على إجابة دقيقة، جرب البحث في Google 😊`, threadID, messageID);
+  }
+}
+
+// [أمر: عداد / counter / count]
+await ensureUser(senderID);
+const countData = await getUserData(senderID);
+const currentCount = (countData?.currency?.counter ?? 0) + 1;
+await updateUserData(senderID, { counter: currentCount });
+api.sendMessage(`🔢 عدادك: ${currentCount}`, threadID, messageID);
+
+// [أمر: إحصائيات / stats / statistics]
+const allUsersStats = await getAllUsers();
+const totalMoney = allUsersStats.reduce((s,u) => s + (u.money??0), 0);
+const richest = allUsersStats.sort((a,b) => (b.money??0)-(a.money??0))[0];
+const infoStats = await api.getThreadInfo(threadID);
+const statsMsg = `📊 ━━ إحصائيات الكروب ━━ 📊\n\n👥 الأعضاء: ${infoStats.participantIDs.length}\n👑 الأدمنز: ${infoStats.adminIDs.length}\n💰 إجمالي الأموال: ${totalMoney.toLocaleString()} $\n🏆 الأغنى: ${richest?.userID || "لا يوجد"} (${(richest?.money||0).toLocaleString()} $)\n👤 إجمالي المستخدمين: ${allUsersStats.length}`;
+api.sendMessage(statsMsg, threadID, messageID);
+
+══════════════════════════════════════════
+ ١٠. أوامر متنوعة ومضحكة — FUN COMMANDS
+══════════════════════════════════════════
+
+// [أمر: عناق / hug / ضم]
+const hugTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+const hugEmojis = ["🤗","💞","🫂","❤️","💕"];
+const hugEmoji2 = hugEmojis[Math.floor(Math.random() * hugEmojis.length)];
+api.sendMessage(`${hugEmoji2} ${senderID} يعانق ${hugTarget || "الجميع"} ${hugEmoji2}`, threadID, messageID);
+
+// [أمر: قبلة / kiss / بوسة]
+const kissTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+api.sendMessage(`💋 ${senderID} يرسل بوسة لـ ${kissTarget || "الجميع"} 😘`, threadID, messageID);
+
+// [أمر: ضرب / hit / اضرب]
+const hitTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+const hitEmojis = ["👊","🥊","🔨","⚡","🌪️"];
+const hitEmoji2 = hitEmojis[Math.floor(Math.random() * hitEmojis.length)];
+api.sendMessage(`${hitEmoji2} ${senderID} ضرب ${hitTarget || "الهواء"} ${hitEmoji2}\n\n(بالمزاح فقط 😂)`, threadID, messageID);
+
+// [أمر: دغدغة / tickle / ضحك]
+const tickleTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+api.sendMessage(`🤣 ${senderID} دغدغ ${tickleTarget || "الجميع"}\nهاهاهاها! 😂😂😂`, threadID, messageID);
+
+// [أمر: بكاء / cry / أبكي]
+const cryTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+api.sendMessage(`😭 ${senderID} يبكي على ${cryTarget || "الجميع"}\n\n😢💧💧💧`, threadID, messageID);
+
+// [أمر: صفعة / slap / اصفع]
+const slapTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+api.sendMessage(`👋 SLAP!\n${senderID} صفع ${slapTarget || "الجواء"} صفعة قوية! 😂\n\n(بالمزاح 😄)`, threadID, messageID);
+
+// [أمر: اضحك / laugh / lol]
+const laughEmojis = ["😂","🤣","😹","😆","🤦","💀"];
+let laughLine = "";
+for (let i = 0; i < 10; i++) laughLine += laughEmojis[Math.floor(Math.random() * laughEmojis.length)];
+api.sendMessage(`${laughLine}\n\nهاهاهاهاهاهاها 😂😂😂`, threadID, messageID);
+
+// [أمر: رقص / dance]
+const dances = ["💃🕺","🎵💃","🕺🎶","✨💃✨","🎊🕺🎊"];
+api.sendMessage(`${dances[Math.floor(Math.random() * dances.length)]} ${senderID} يرقص!\n\n🎵🎶 على أنغام الموسيقى 🎶🎵`, threadID, messageID);
+
+// [أمر: آه / sigh / تنهيدة]
+api.sendMessage(`😮‍💨 آهههههههه...\n${senderID} يتنهّد عميقاً...\n\n💭 الحياة صعبة أحياناً 😅`, threadID, messageID);
+
+// [أمر: هاجس / confession / اعتراف]
+const confessions = [
+  "أحياناً أتحدث مع نفسي بصوت عالٍ 🤫",
+  "أتظاهر أنني نائم لتجنب الحديث 😅",
+  "أحياناً أحسب نفسي الأذكى في الغرفة 🤭",
+  "أنسى الكلام الذي أريد قوله فجأة 😤",
+  "أحياناً أضحك على نكتة لم أفهمها 😂"
+];
+api.sendMessage(`🤫 اعتراف عشوائي:\n\n"${confessions[Math.floor(Math.random() * confessions.length)]}"`, threadID, messageID);
+
+// [أمر: عشوائي / random / اختيار]
+const randomOptions = args.slice(1).join(" ").split(/[,،|]/);
+if (randomOptions.length < 2) { api.sendMessage("🎲 أعطِ خيارين أو أكثر مفصولة بفاصلة\nمثال: كينو عشوائي فستان، بدلة، جينز", threadID, messageID); }
+else {
+  const chosen = randomOptions[Math.floor(Math.random() * randomOptions.length)].trim();
+  api.sendMessage(`🎲 الاختيار العشوائي:\n\n✅ ${chosen}`, threadID, messageID);
+}
+
+// [أمر: تحدي / challenge]
+const challenges = [
+  "تحدي: قل 5 أشياء تحبها في نفسك! 💪",
+  "تحدي: اكتب أطول رسالة ممكنة خلال 30 ثانية! ⏱️",
+  "تحدي: غير اسمك في المجموعة لـ 10 دقائق! 😄",
+  "تحدي: أرسل صورة لأضحك شيء تراه حولك! 📸",
+  "تحدي: قل جملة فيها حرف الضاد 5 مرات! 🗣️"
+];
+api.sendMessage(`🎯 ${challenges[Math.floor(Math.random() * challenges.length)]}`, threadID, messageID);
+
+// [أمر: سبام / spam / تكرار]
+const spamText = args.slice(2).join(" ") || "🔥";
+const spamCount = Math.min(parseInt(args[1]) || 5, 10);
+for (let i = 0; i < spamCount; i++) {
+  await new Promise(r => setTimeout(r, 500));
+  api.sendMessage(spamText, threadID, messageID);
+}
+
+// [أمر: عد / countdown / تنازلي]
+const countFrom = Math.min(parseInt(args[1]) || 5, 10);
+for (let i = countFrom; i >= 0; i--) {
+  await new Promise(r => setTimeout(r, 1000));
+  api.sendMessage(i === 0 ? "🚀 انطلق!" : `${i}...`, threadID, messageID);
+}
+
+// [أمر: ترتيب عشوائي / shuffle / خلط]
+const infoShuffle = await api.getThreadInfo(threadID);
+const shuffled = [...infoShuffle.participantIDs].sort(() => Math.random() - 0.5);
+let shuffleMsg = `🎲 الترتيب العشوائي للأعضاء:\n\n`;
+shuffled.forEach((uid, i) => { shuffleMsg += `${i + 1}. ${uid}\n`; });
+api.sendMessage(shuffleMsg, threadID, messageID);
+
+// [أمر: اختر عضو / pick random / random member]
+const infoPickRandom = await api.getThreadInfo(threadID);
+const randomMember = infoPickRandom.participantIDs[Math.floor(Math.random() * infoPickRandom.participantIDs.length)];
+api.sendMessage(`🎯 العضو المختار عشوائياً:\n\n👤 ${randomMember}\n\n(اختيار عشوائي 100% 🎲)`, threadID, messageID);
+
+══════════════════════════════════════════
+ ١١. الحماية والأمان — PROTECTION
+══════════════════════════════════════════
+
+// [أمر: مراقبة / monitor / watch]
+const infoMonitor = await api.getThreadInfo(threadID);
+const monitorMsg = `🔍 ━━ تقرير الأمان ━━ 🔍\n\n✅ البوت يراقب المجموعة\n👥 الأعضاء: ${infoMonitor.participantIDs.length}\n👑 الأدمنز: ${infoMonitor.adminIDs.length}\n🛡️ وضع الحماية: نشط`;
+api.sendMessage(monitorMsg, threadID, messageID);
+
+// [أمر: قائمة الحظر / banlist / محظورين]
+api.sendMessage(`🚫 قائمة المحظورين:\n\n(لا يوجد نظام حظر مدمج في Messenger — يتم الطرد مباشرة)\n\nللحظر: كينو احظر @المستخدم`, threadID, messageID);
+
+// [أمر: تحقق / verify / حساب حقيقي]
+const verifyTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+if (!verifyTarget) { api.sendMessage("❌ منشن شخصاً للتحقق منه", threadID, messageID); }
+else {
+  const verifyData = await getUserData(verifyTarget);
+  const msgs = verifyData?.currency?.messageCount ?? 0;
+  const lvl = verifyData?.currency?.level ?? 1;
+  const trustScore = Math.min(msgs * 2 + lvl * 10, 100);
+  api.sendMessage(`🔍 تحقق من ${verifyTarget}:\n\n💬 الرسائل: ${msgs}\n📊 المستوى: ${lvl}\n🛡️ نقاط الثقة: ${trustScore}/100\n${trustScore >= 70 ? "✅ حساب موثوق" : trustScore >= 40 ? "⚠️ حساب عادي" : "❗ حساب جديد"}`, threadID, messageID);
+}
+
+══════════════════════════════════════════
+ ١٢. ميزات متقدمة — ADVANCED FEATURES
+══════════════════════════════════════════
+
+// [أمر: تلقائي / auto / وضع تلقائي]
+const autoAction = args[1];
+if (autoAction === "ترحيب") {
+  global.autoWelcome = global.autoWelcome || {};
+  global.autoWelcome[threadID] = !global.autoWelcome[threadID];
+  api.sendMessage(`🤖 الترحيب التلقائي: ${global.autoWelcome[threadID] ? "✅ مفعّل" : "❌ مطفأ"}`, threadID, messageID);
+} else {
+  api.sendMessage("⚙️ الأوامر التلقائية:\n• كينو تلقائي ترحيب — ترحيب تلقائي بالأعضاء الجدد", threadID, messageID);
+}
+
+// [أمر: احتفال / celebrate / party]
+const partyEmojis = ["🎉","🎊","🎈","🥳","🎆","🎇","✨","🎂","🍾","🥂"];
+let partyMsg = "";
+for (let i = 0; i < 20; i++) partyMsg += partyEmojis[Math.floor(Math.random() * partyEmojis.length)];
+api.sendMessage(`${partyMsg}\n\n🥳 الاحتفال بدأ! ${partyMsg}`, threadID, messageID);
+
+// [أمر: لعبة الذاكرة / memory game]
+const memorySequence = Array.from({length: 5}, () => Math.floor(Math.random() * 9) + 1);
+api.sendMessage(`🧠 لعبة الذاكرة!\n\nاحفظ هذا التسلسل:\n${memorySequence.join(" - ")}\n\nسيُحذف بعد 10 ثوانٍ!`, threadID, messageID);
+setTimeout(async () => {
+  api.sendMessage(`❓ ما كان التسلسل؟ أرسل الأرقام مفصولة بمسافات!\nالإجابة الصحيحة: ${memorySequence.join(" ")}`, threadID, messageID);
+}, 10000);
+
+// [أمر: لعبة السرعة / speed game / من الأسرع]
+const speedNum = Math.floor(Math.random() * 50) + 1;
+api.sendMessage(`⚡ لعبة السرعة!\n\nأول من يكتب الرقم ${speedNum} يفوز بـ 500 $!`, threadID, messageID);
+
+// [أمر: جائزة / prize / مكافأة خاصة]
+const prizeTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+const prizeAmount = parseInt(args.find(a => /^\d+$/.test(a))) || 1000;
+const prizeReason = args.filter(a => !a.includes("@") && !/^\d+$/.test(a)).slice(1).join(" ") || "تميزه";
+if (!prizeTarget) { api.sendMessage("❌ منشن شخصاً", threadID, messageID); }
+else {
+  await ensureUser(prizeTarget);
+  await addMoney(prizeTarget, prizeAmount);
+  api.sendMessage(`🏆 جائزة خاصة!\n\n🎖️ الفائز: ${prizeTarget}\n💰 المبلغ: ${prizeAmount.toLocaleString()} $\n📌 السبب: ${prizeReason}\n\nمبروك! 🎉`, threadID, messageID);
+}
+
+// [أمر: عقوبة / penalty / غرامة]
+const penaltyTarget = Object.keys(mentions)[0] || messageReply?.senderID;
+const penaltyAmount = parseInt(args.find(a => /^\d+$/.test(a))) || 500;
+const penaltyReason = args.filter(a => !a.includes("@") && !/^\d+$/.test(a)).slice(1).join(" ") || "مخالفة";
+if (!penaltyTarget) { api.sendMessage("❌ منشن شخصاً", threadID, messageID); }
+else {
+  await ensureUser(penaltyTarget);
+  const penRes = await removeMoney(penaltyTarget, penaltyAmount);
+  if (!penRes.success) api.sendMessage(`❌ رصيد ${penaltyTarget} غير كافٍ للغرامة`, threadID, messageID);
+  else api.sendMessage(`⚖️ غرامة!\n\n👤 ${penaltyTarget}\n💸 المبلغ: ${penaltyAmount.toLocaleString()} $\n📌 السبب: ${penaltyReason}`, threadID, messageID);
+}
+
+// [أمر: مزاد / auction / بيع]
+const auctionItem = args.slice(1, -1).join(" ") || "شيء مجهول";
+const startingBid = parseInt(args[args.length - 1]) || 1000;
+api.sendMessage(`🏛️ مزاد!\n\n🏷️ العنصر: ${auctionItem}\n💰 السعر الابتدائي: ${startingBid.toLocaleString()} $\n⏰ المزاد سيبدأ الآن!\n\nللمزايدة: كينو أزايد [مبلغ]`, threadID, messageID);
+
+// [أمر: مهمة / mission / quest]
+const missions = [
+  { name: "أرسل 10 رسائل اليوم", reward: 500 },
+  { name: "رحّب بعضو جديد", reward: 300 },
+  { name: "العب 3 ألعاب", reward: 700 },
+  { name: "اكسب 1000 $ من العمل", reward: 1000 }
+];
+const randomMission = missions[Math.floor(Math.random() * missions.length)];
+api.sendMessage(`📋 مهمتك اليومية:\n\n🎯 ${randomMission.name}\n💰 المكافأة: ${randomMission.reward} $\n\nأنجز المهمة واكتب: كينو أنجزت المهمة`, threadID, messageID);
+
+// [أمر: تحويل عملة / currency convert / تحويل]
+const fromAmount = parseFloat(args[1]) || 1;
+const fromCur = args[2]?.toUpperCase() || "USD";
+const toCur = args[3]?.toUpperCase() || "IQD";
+const rates = { "USD": 1, "IQD": 1480, "SAR": 3.75, "EUR": 0.92, "AED": 3.67, "KWD": 0.31, "EGP": 30.9 };
+const toUSD = fromAmount / (rates[fromCur] || 1);
+const toFinal = toUSD * (rates[toCur] || 1);
+api.sendMessage(`💱 تحويل العملات:\n\n${fromAmount} ${fromCur} = ${toFinal.toFixed(2)} ${toCur}`, threadID, messageID);
+
 `;
 
 // ══════════════════════════════════════════
-//   SYSTEM PROMPT
+//   BUILD SYSTEM PROMPT
 // ══════════════════════════════════════════
 function buildSystemPrompt(ctx) {
-  return `أنت KIRA AI — مساعد خارق داخل بوت فيسبوك ماسنجر.
-مهمتك: فهم الطلب العربي وتوليد كود JavaScript ينفذه فوراً.
+  return `أنت KIRA AI — مساعد برمجي ذكي خبير في JavaScript لبوت Messenger.
+مهمتك: تحليل الطلب وإنتاج كود JavaScript يُنفَّذ مباشرةً داخل دالة async.
 
 ━━━ السياق الحالي ━━━
 threadID    : ${ctx.threadID}
@@ -550,13 +1480,16 @@ getUserData, addMoney, removeMoney, ensureUser, updateUserData, getAllUsers, axi
 ${KNOWLEDGE_BASE}
 
 ━━━ قواعد صارمة ━━━
-1. أرجع كود JavaScript نظيف فقط — بدون أي شرح أو markdown
+1. أرجع كود JavaScript نظيف فقط — بدون أي شرح أو markdown أو backticks
 2. استخدم المتغيرات والدوال الموضحة فقط
 3. استخدم await للعمليات async
 4. أضف تحقق من الأخطاء ورسائل واضحة بالعربي
 5. إذا الطلب غير واضح أرسل رسالة تسأل عن التفاصيل
 6. لا تستخدم require() لمكتبات غير موجودة في السياق
-7. الكود يجب أن يكون مختصراً وفعالاً`;
+7. الكود يجب أن يكون مختصراً وفعالاً
+8. اعتمد على قاعدة المعرفة لفهم الأوامر بالعربية العامية
+9. إذا الطلب فيه منشن، استخدم Object.keys(mentions)[0]
+10. إذا الطلب فيه رد على رسالة، استخدم messageReply?.senderID`;
 }
 
 // ══════════════════════════════════════════
@@ -572,7 +1505,7 @@ async function callGroq(systemPrompt, userMessage) {
         { role: "user",   content: userMessage  }
       ],
       max_tokens: 2048,
-      temperature: 0.15
+      temperature: 0.1
     },
     {
       headers: { "Authorization": `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
@@ -629,7 +1562,6 @@ async function formatCommandsList(threadID, messageID, api) {
     return api.sendMessage("📭 لا توجد أوامر محفوظة بعد.\n\nلحفظ أمر: كينو [طلب] احفظ باسم [الاسم]", threadID, messageID);
   }
 
-  // تقسيم حسب الفئة
   const byCategory = {};
   for (const c of cmds) {
     const cat = c.category || "عام";
@@ -656,9 +1588,6 @@ async function formatCommandsList(threadID, messageID, api) {
   msg += "▶️ لتشغيل أمر: كينو شغل [الاسم]\n";
   msg += "📄 لعرض كود أمر: كينو كود [الاسم]";
 
-  // سؤال عن الحذف
-  msg += "\n\n🗑️ هل تود حذف أي أمر؟ اكتب:\nكينو احذف أمر [الاسم]";
-
   return api.sendMessage(msg, threadID, messageID);
 }
 
@@ -676,20 +1605,18 @@ module.exports.run = async function ({ api, event, args }) {
 
   if (!prompt) {
     return api.sendMessage(
-      "⌬ ━━ 𝗞𝗜𝗥𝗔 𝗔𝗜 𝗨𝗟𝗧𝗥𝗔 ━━ ⌬\n\n💡 اكتب أي طلب بالعربي:\n\nأمثلة:\n• كينو اطرد المنشن\n• كينو أعطِ المنشن 5000 فلوس\n• كينو رقّ المنشن لأدمن\n• كينو احظر المنشن\n• كينو بياناتك\n• كينو احذف أمر [اسم]\n• كينو شغل [اسم]\n• كينو كود [اسم]",
+      "⌬ ━━ 𝗞𝗜𝗥𝗔 𝗔𝗜 𝗨𝗟𝗧𝗥𝗔 𝗣𝗥𝗢 ━━ ⌬\n\n💡 اكتب أي طلب بالعربي:\n\n🏠 إدارة: اطرد | رقّ | قفل | فتح | غير اسم\n💰 اقتصاد: رصيدي | عمل | يومي | سرق | حول\n🎮 ألعاب: روليت | سلوت | نرد | بلاك جاك\n🎭 ترفيه: نكتة | شعر | حكمة | طالعك\n\nكينو مساعدة — للقائمة الكاملة",
       threadID, messageID
     );
   }
 
   // ══ أوامر نظام خاصة ══════════════════════
 
-  // بياناتك — عرض كل الأوامر المحفوظة
   if (prompt === "بياناتك" || prompt === "قائمة" || prompt === "قائمة الأوامر") {
     return formatCommandsList(threadID, messageID, api);
   }
 
-  // احذف أمر
-  if (/^احذف\s+أمر\s+/i.test(prompt) || /^احذف\s+امر\s+/i.test(prompt)) {
+  if (/^احذف\s+(?:أمر|امر)\s+/i.test(prompt)) {
     const name = prompt.replace(/^احذف\s+(?:أمر|امر)\s+/i, "").trim();
     const res = await deleteCmd(name);
     return api.sendMessage(
@@ -698,13 +1625,11 @@ module.exports.run = async function ({ api, event, args }) {
     );
   }
 
-  // احذف كل الأوامر
   if (prompt === "احذف كل الأوامر" || prompt === "مسح كل الأوامر") {
     const res = await deleteAll();
     return api.sendMessage(`🗑️ تم حذف ${res.deletedCount} أمر`, threadID, messageID);
   }
 
-  // شغل أمر
   if (/^شغ[ّ]?ل\s+/i.test(prompt)) {
     const name = prompt.replace(/^شغ[ّ]?ل\s+/i, "").trim();
     const saved = await loadCmd(name);
@@ -721,7 +1646,6 @@ module.exports.run = async function ({ api, event, args }) {
     return;
   }
 
-  // عرض كود أمر
   if (/^كود\s+/i.test(prompt)) {
     const name = prompt.replace(/^كود\s+/i, "").trim();
     const saved = await loadCmd(name);
@@ -741,7 +1665,6 @@ module.exports.run = async function ({ api, event, args }) {
     const rawCode = await callGroq(systemPrompt, prompt);
     const code = cleanCode(rawCode);
 
-    // حفظ تلقائي لو فيه "احفظ" أو "اخزن"
     let savedName = null;
     if (/احفظ|اخزن/i.test(prompt)) {
       const nameMatch = prompt.match(/(?:احفظ|اخزن)(?:\s+باسم)?\s+(\S+)/i);
@@ -751,7 +1674,6 @@ module.exports.run = async function ({ api, event, args }) {
       await saveCmd(savedName, code, prompt, category, senderID);
     }
 
-    // تنفيذ
     await safeEval(code, { api, event, args, mentions: mentions||{}, threadID, messageID, senderID, messageReply });
 
     if (savedName)
