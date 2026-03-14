@@ -15,7 +15,7 @@ module.exports.config = {
   cooldowns: 3,
 };
 
-const GROQ_API_KEY = "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";
+const GROQ_API_KEY = "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";
 const ADMIN_ID = "61580139921634"; // أيمن
 
 // ===== كشف اللهجة =====
