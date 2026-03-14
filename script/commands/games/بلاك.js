@@ -1,6 +1,7 @@
 const { createCanvas } = require("@napi-rs/canvas");
 const fs = require("fs-extra");
 const path = require("path");
+const { getUserData, addMoney, removeMoney, ensureUser } = require(path.join(process.cwd(), "includes", "mongodb.js"));
 
 module.exports.config = {
   name: "بلاك",
@@ -367,18 +368,16 @@ module.exports.run = async function ({ api, event }) {
 
     const total = handTotal(game.player);
     if (total > 21) {
-      // خسر
-      updateMoney(senderID, game.money - game.bet);
+      // خسر — اشيل الرهان
+      await removeMoney(senderID, game.bet);
       game.money -= game.bet;
       games.delete(senderID);
       return sendImage(api, game, "result", threadID, messageID);
     }
     if (total === 21) {
-      // وقف تلقائي
-      await dealerPlay(game);
-      const finalMoney = calcFinal(game);
-      game.money = finalMoney;
-      updateMoney(senderID, finalMoney);
+      // 21 تلقائي — وقف ولعب الكازينو
+      dealerPlay(game);
+      await calcFinalAndSave(game, senderID);
       games.delete(senderID);
       return sendImage(api, game, "result", threadID, messageID);
     }
@@ -390,10 +389,8 @@ module.exports.run = async function ({ api, event }) {
     const game = games.get(senderID);
     if (!game) return api.sendMessage("❌ ما عندك لعبة جارية!", threadID, messageID);
 
-    await dealerPlay(game);
-    const finalMoney = calcFinal(game);
-    game.money = finalMoney;
-    updateMoney(senderID, finalMoney);
+    dealerPlay(game);
+    await calcFinalAndSave(game, senderID);
     games.delete(senderID);
     return sendImage(api, game, "result", threadID, messageID);
   }
@@ -406,16 +403,10 @@ module.exports.run = async function ({ api, event }) {
   if (games.has(senderID))
     return api.sendMessage("❌ عندك لعبة جارية! اكتب: بلاك سحب أو بلاك وقف", threadID, messageID);
 
-  let money = 0;
-  try {
-    if (global.db?.allUserData) {
-      const dbUser = global.db.allUserData.find(u => u.userID === senderID);
-      if (dbUser) {
-        const d = dbUser.data || {};
-        money = d.money ?? d.coin ?? d.coins ?? 0;
-      }
-    }
-  } catch (_) {}
+  // ── جلب الرصيد من MongoDB ──
+  await ensureUser(senderID);
+  const userData = await getUserData(senderID);
+  const money = userData?.currency?.money ?? 0;
 
   if (money < bet)
     return api.sendMessage(`❌ رصيدك غير كافٍ! رصيدك: ${money.toLocaleString()} $`, threadID, messageID);
@@ -430,21 +421,21 @@ module.exports.run = async function ({ api, event }) {
     dealer: [deck.pop(), deck.pop()],
   };
 
-  // بلاك جاك فوري
+  // بلاك جاك فوري (21 من أول ورقتين)
   if (handTotal(game.player) === 21) {
-    const finalMoney = money + Math.floor(bet * 1.5);
-    game.money = finalMoney;
-    updateMoney(senderID, finalMoney);
+    const bonus = Math.floor(bet * 1.5);
+    await addMoney(senderID, bonus);
+    game.money = money + bonus;
     return sendImage(api, game, "result", threadID, messageID);
   }
 
   games.set(senderID, game);
 
-  // حذف اللعبة بعد 3 دقائق
-  setTimeout(() => {
+  // حذف اللعبة بعد 3 دقائق (انتهت المهلة = خسر الرهان)
+  setTimeout(async () => {
     if (games.has(senderID)) {
       games.delete(senderID);
-      updateMoney(senderID, money - bet);
+      await removeMoney(senderID, bet);
     }
   }, 3 * 60 * 1000);
 
@@ -458,26 +449,33 @@ function dealerPlay(game) {
   }
 }
 
-function calcFinal(game) {
+async function calcFinalAndSave(game, userID) {
   const pT = handTotal(game.player);
   const dT = handTotal(game.dealer);
-  if (pT > 21) return game.money - game.bet;
-  if (dT > 21 || pT > dT) return game.money + game.bet;
-  if (pT < dT) return game.money - game.bet;
-  return game.money;
+  const bet = game.bet;
+
+  if (pT > 21) {
+    // خسر
+    await removeMoney(userID, bet);
+    game.money = game.money - bet;
+  } else if (dT > 21 || pT > dT) {
+    // فاز
+    await addMoney(userID, bet);
+    game.money = game.money + bet;
+  } else if (pT < dT) {
+    // خسر
+    await removeMoney(userID, bet);
+    game.money = game.money - bet;
+  }
+  // تعادل — ما يتغير شيء
 }
 
-function updateMoney(userID, newMoney) {
+async function updateMoney(userID, newMoney) {
   try {
-    if (global.db?.allUserData) {
-      const dbUser = global.db.allUserData.find(u => u.userID === userID);
-      if (dbUser) {
-        dbUser.data = dbUser.data || {};
-        if (dbUser.data.money !== undefined) dbUser.data.money = newMoney;
-        else if (dbUser.data.coin !== undefined) dbUser.data.coin = newMoney;
-        else if (dbUser.data.coins !== undefined) dbUser.data.coins = newMoney;
-        else dbUser.data.money = newMoney;
-      }
-    }
+    const userData = await getUserData(userID);
+    const current = userData?.currency?.money ?? 0;
+    const diff = newMoney - current;
+    if (diff > 0) await addMoney(userID, diff);
+    else if (diff < 0) await removeMoney(userID, Math.abs(diff));
   } catch (_) {}
 }
