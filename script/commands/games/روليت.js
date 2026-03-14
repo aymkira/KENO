@@ -1,6 +1,7 @@
 const { createCanvas } = require("@napi-rs/canvas");
 const fs = require("fs-extra");
 const path = require("path");
+const { getUserData, addMoney, removeMoney, ensureUser } = require(path.join(process.cwd(), "includes", "mongodb.js"));
 
 module.exports.config = {
   name: "روليت",
@@ -318,38 +319,28 @@ module.exports.run = async function ({ api, event }) {
   if (!choice)
     return api.sendMessage("❌ اختيار غير صحيح! استخدم: أحمر، أسود، زوجي، فردي، أو رقم (0-36)", threadID, messageID);
 
-  // جلب الرصيد
-  let currency = {};
-  try {
-    if (global.db?.allUserData) {
-      const dbUser = global.db.allUserData.find(u => u.userID === senderID);
-      if (dbUser) currency = dbUser.data || {};
-    }
-  } catch (_) {}
+  // ── جلب الرصيد من MongoDB ──
+  await ensureUser(senderID);
+  const userData = await getUserData(senderID);
+  const money = userData?.currency?.money ?? 0;
 
-  const money = currency.money || currency.coin || currency.coins || 0;
   if (money < bet)
     return api.sendMessage(`❌ رصيدك غير كافٍ!\nرصيدك: ${money.toLocaleString()} $`, threadID, messageID);
 
-  // تدوير العجلة
+  // ── تدوير العجلة ──
   const result = Math.floor(Math.random() * 37);
   const multiplier = checkWin(result, choice);
   const profit = multiplier > 0 ? bet * multiplier - bet : -bet;
   const finalMoney = money + profit;
 
-  // تحديث الرصيد
-  try {
-    if (global.db?.allUserData) {
-      const dbUser = global.db.allUserData.find(u => u.userID === senderID);
-      if (dbUser) {
-        dbUser.data = dbUser.data || {};
-        if (dbUser.data.money !== undefined) dbUser.data.money = finalMoney;
-        else if (dbUser.data.coin !== undefined) dbUser.data.coin = finalMoney;
-        else if (dbUser.data.coins !== undefined) dbUser.data.coins = finalMoney;
-        else dbUser.data.money = finalMoney;
-      }
-    }
-  } catch (_) {}
+  // ── تحديث الرصيد في MongoDB ──
+  if (multiplier > 0) {
+    // فاز — أضف الربح (المبلغ المسترجع = bet * multiplier)
+    await addMoney(senderID, bet * multiplier - bet);
+  } else {
+    // خسر — اشيل الرهان
+    await removeMoney(senderID, bet);
+  }
 
   if (api.setMessageReaction) api.setMessageReaction("🎰", messageID, ()=>{}, true);
 
