@@ -163,9 +163,17 @@ function buildAPI(globalOptions, html, jar) {
 	};
 
 	const defaultFuncs = utils.makeDefaults(html, i_userID || userID, ctx);
+	// ✅ تعديل: تحقق إن الملف يصدر function قبل استدعائه
 	require('fs').readdirSync(__dirname + '/src/').filter((v) => v.endsWith('.js')).map(function (v) {
-						api[v.replace('.js', '')] = require('./src/' + v)(defaultFuncs, api, ctx);
-				});
+		try {
+			const mod = require('./src/' + v);
+			if (typeof mod === 'function') {
+				api[v.replace('.js', '')] = mod(defaultFuncs, api, ctx);
+			}
+		} catch(e) {
+			// تجاهل الأخطاء الفردية
+		}
+	});
 	api.listen = api.listenMqtt;
 
 	return [ctx, defaultFuncs, api];
