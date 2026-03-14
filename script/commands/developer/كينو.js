@@ -1,4 +1,3 @@
-
 // ══════════════════════════════════════════════════════════════
 //   KIRA AI — ULTRA PRO MAX
 //   200+ دالة — يفهم العربي — ينفذ أي أمر
@@ -21,7 +20,7 @@ module.exports.config = {
   cooldowns: 2
 };
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY || "YOUR_GROQ_KEY_HERE";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
 const GROQ_MODEL   = "llama-3.3-70b-versatile";
 
 // ══════════════════════════════════════════
@@ -576,7 +575,7 @@ async function callGroq(systemPrompt, userMessage) {
       temperature: 0.15
     },
     {
-      headers: { "Authorization": `Bearer ${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}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
       timeout: 30000
     }
   );
