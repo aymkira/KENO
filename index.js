@@ -541,12 +541,6 @@ html,body{
   100%{opacity:0;transform:translate(-50%,10px) scale(0.3)}
 }
 
-/* ══════════════════════════════════════════
-   TYPEWRITER
-══════════════════════════════════════════ */
-.typewriter{overflow:hidden;white-space:nowrap;border-right:1px solid rgba(184,180,168,0.4)}
-.typewriter.done{border-right:none}
-
 /* SCROLLBAR */
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:#020202}
@@ -581,7 +575,6 @@ html,body{
 <!-- ══ BACKGROUND SCENE ══ -->
 <div id="scene">
   <svg id="scene-svg" viewBox="0 0 1400 600" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax slice">
-    <!-- SKY — dark gradient -->
     <defs>
       <radialGradient id="moonGlow" cx="15%" cy="18%" r="12%">
         <stop offset="0%" stop-color="rgba(220,215,200,0.08)"/>
@@ -592,15 +585,11 @@ html,body{
       <filter id="blur1"><feGaussianBlur stdDeviation="1"/></filter>
     </defs>
 
-    <!-- moon glow -->
     <circle cx="210" cy="108" r="80" fill="url(#moonGlow)"/>
-    <!-- moon -->
     <circle cx="210" cy="108" r="28" fill="rgba(200,195,178,0.06)" stroke="rgba(200,195,178,0.1)" stroke-width="0.5"/>
-    <!-- moon craters -->
     <circle cx="202" cy="102" r="4" fill="rgba(150,145,130,0.04)"/>
     <circle cx="218" cy="115" r="3" fill="rgba(150,145,130,0.03)"/>
 
-    <!-- distant dead trees - far left -->
     <g opacity="0.25" transform="translate(60,0)">
       <line x1="30" y1="600" x2="28" y2="380" stroke="#1a1a18" stroke-width="4"/>
       <line x1="28" y1="420" x2="5" y2="340" stroke="#1a1a18" stroke-width="2.5"/>
@@ -609,7 +598,6 @@ html,body{
       <line x1="5" y1="340" x2="-10" y2="310" stroke="#1a1a18" stroke-width="1.5"/>
       <line x1="5" y1="340" x2="15" y2="305" stroke="#1a1a18" stroke-width="1.5"/>
     </g>
-    <!-- distant dead trees - far right -->
     <g opacity="0.25" transform="translate(1280,0)">
       <line x1="30" y1="600" x2="32" y2="390" stroke="#1a1a18" stroke-width="4"/>
       <line x1="32" y1="430" x2="8" y2="345" stroke="#1a1a18" stroke-width="2.5"/>
@@ -617,20 +605,11 @@ html,body{
       <line x1="55" y1="370" x2="70" y2="335" stroke="#1a1a18" stroke-width="1.5"/>
     </g>
 
-    <!-- GROUND — cracked earth -->
-    <!-- main ground -->
-    <path d="M0 540 Q350 520 700 535 Q1050 550 1400 530 L1400 600 L0 600 Z"
-      fill="rgba(12,11,10,0.98)"/>
-    <!-- ground mid layer -->
-    <path d="M0 560 Q250 545 700 558 Q1100 568 1400 550 L1400 600 L0 600 Z"
-      fill="rgba(8,7,6,0.99)"/>
-    <!-- soil texture strips -->
-    <path d="M50 575 Q200 570 400 575 Q600 580 800 574 Q1000 568 1200 573 Q1300 576 1400 572"
-      stroke="rgba(184,180,168,0.03)" stroke-width="1.5" fill="none"/>
-    <path d="M0 585 Q300 580 600 585 Q900 590 1200 583 L1400 586"
-      stroke="rgba(184,180,168,0.025)" stroke-width="1" fill="none"/>
+    <path d="M0 540 Q350 520 700 535 Q1050 550 1400 530 L1400 600 L0 600 Z" fill="rgba(12,11,10,0.98)"/>
+    <path d="M0 560 Q250 545 700 558 Q1100 568 1400 550 L1400 600 L0 600 Z" fill="rgba(8,7,6,0.99)"/>
+    <path d="M50 575 Q200 570 400 575 Q600 580 800 574 Q1000 568 1200 573 Q1300 576 1400 572" stroke="rgba(184,180,168,0.03)" stroke-width="1.5" fill="none"/>
+    <path d="M0 585 Q300 580 600 585 Q900 590 1200 583 L1400 586" stroke="rgba(184,180,168,0.025)" stroke-width="1" fill="none"/>
 
-    <!-- CRACKS in ground -->
     <g stroke="rgba(184,180,168,0.08)" stroke-width="0.8" fill="none">
       <path d="M180 555 L195 565 L188 572 L200 580"/>
       <path d="M195 565 L210 560"/>
@@ -643,64 +622,49 @@ html,body{
       <path d="M1250 548 L1265 558 L1258 567"/>
     </g>
 
-    <!-- GRAVESTONES -->
-    <!-- large center gravestone -->
     <g transform="translate(660,390)">
-      <path d="M0 170 L0 20 Q0 0 20 0 L60 0 Q80 0 80 20 L80 170 Z"
-        fill="rgba(22,20,18,0.95)" stroke="rgba(184,180,168,0.15)" stroke-width="1"/>
-      <!-- arch detail -->
+      <path d="M0 170 L0 20 Q0 0 20 0 L60 0 Q80 0 80 20 L80 170 Z" fill="rgba(22,20,18,0.95)" stroke="rgba(184,180,168,0.15)" stroke-width="1"/>
       <path d="M10 20 Q10 5 20 5 L60 5 Q70 5 70 20" fill="none" stroke="rgba(184,180,168,0.08)" stroke-width="0.8"/>
-      <!-- cross engraving -->
       <line x1="40" y1="30" x2="40" y2="100" stroke="rgba(184,180,168,0.12)" stroke-width="1.5"/>
       <line x1="18" y1="55" x2="62" y2="55" stroke="rgba(184,180,168,0.12)" stroke-width="1.5"/>
-      <!-- RIP text -->
       <text x="40" y="125" text-anchor="middle" fill="rgba(184,180,168,0.2)" font-size="9" font-family="serif" letter-spacing="3">R.I.P</text>
       <text x="40" y="140" text-anchor="middle" fill="rgba(184,180,168,0.12)" font-size="6" font-family="serif">مرقدٌ في الأبد</text>
-      <!-- base -->
       <rect x="-8" y="165" width="96" height="10" fill="rgba(18,16,14,0.9)" stroke="rgba(184,180,168,0.1)" stroke-width="0.8"/>
     </g>
 
-    <!-- left gravestones -->
     <g transform="translate(300,430)">
-      <path d="M0 130 L0 18 Q0 0 15 0 L45 0 Q60 0 60 18 L60 130 Z"
-        fill="rgba(20,18,16,0.95)" stroke="rgba(184,180,168,0.12)" stroke-width="1"/>
+      <path d="M0 130 L0 18 Q0 0 15 0 L45 0 Q60 0 60 18 L60 130 Z" fill="rgba(20,18,16,0.95)" stroke="rgba(184,180,168,0.12)" stroke-width="1"/>
       <line x1="30" y1="25" x2="30" y2="80" stroke="rgba(184,180,168,0.1)" stroke-width="1.2"/>
       <line x1="12" y1="45" x2="48" y2="45" stroke="rgba(184,180,168,0.1)" stroke-width="1.2"/>
       <text x="30" y="100" text-anchor="middle" fill="rgba(184,180,168,0.15)" font-size="7" font-family="serif">✝</text>
       <rect x="-6" y="127" width="72" height="8" fill="rgba(15,13,12,0.9)" stroke="rgba(184,180,168,0.08)" stroke-width="0.7"/>
     </g>
     <g transform="translate(420,455)">
-      <path d="M0 100 L0 14 Q0 0 12 0 L38 0 Q50 0 50 14 L50 100 Z"
-        fill="rgba(18,16,15,0.9)" stroke="rgba(184,180,168,0.1)" stroke-width="0.8"/>
+      <path d="M0 100 L0 14 Q0 0 12 0 L38 0 Q50 0 50 14 L50 100 Z" fill="rgba(18,16,15,0.9)" stroke="rgba(184,180,168,0.1)" stroke-width="0.8"/>
       <line x1="25" y1="20" x2="25" y2="62" stroke="rgba(184,180,168,0.08)" stroke-width="1"/>
       <line x1="10" y1="35" x2="40" y2="35" stroke="rgba(184,180,168,0.08)" stroke-width="1"/>
       <rect x="-5" y="97" width="60" height="7" fill="rgba(14,12,11,0.9)" stroke="rgba(184,180,168,0.07)" stroke-width="0.6"/>
     </g>
 
-    <!-- right gravestones -->
     <g transform="translate(880,440)">
-      <path d="M0 120 L0 16 Q0 0 14 0 L42 0 Q56 0 56 16 L56 120 Z"
-        fill="rgba(20,18,16,0.92)" stroke="rgba(184,180,168,0.11)" stroke-width="0.9"/>
+      <path d="M0 120 L0 16 Q0 0 14 0 L42 0 Q56 0 56 16 L56 120 Z" fill="rgba(20,18,16,0.92)" stroke="rgba(184,180,168,0.11)" stroke-width="0.9"/>
       <line x1="28" y1="22" x2="28" y2="72" stroke="rgba(184,180,168,0.09)" stroke-width="1.1"/>
       <line x1="11" y1="40" x2="45" y2="40" stroke="rgba(184,180,168,0.09)" stroke-width="1.1"/>
       <text x="28" y="92" text-anchor="middle" fill="rgba(184,180,168,0.14)" font-size="6" font-family="serif">هنا يرقد</text>
       <rect x="-6" y="117" width="68" height="8" fill="rgba(15,13,12,0.9)" stroke="rgba(184,180,168,0.08)" stroke-width="0.6"/>
     </g>
     <g transform="translate(1010,460)">
-      <path d="M0 95 L0 13 Q0 0 11 0 L39 0 Q50 0 50 13 L50 95 Z"
-        fill="rgba(18,16,14,0.88)" stroke="rgba(184,180,168,0.09)" stroke-width="0.8"/>
+      <path d="M0 95 L0 13 Q0 0 11 0 L39 0 Q50 0 50 13 L50 95 Z" fill="rgba(18,16,14,0.88)" stroke="rgba(184,180,168,0.09)" stroke-width="0.8"/>
       <line x1="25" y1="18" x2="25" y2="58" stroke="rgba(184,180,168,0.07)" stroke-width="1"/>
       <line x1="10" y1="33" x2="40" y2="33" stroke="rgba(184,180,168,0.07)" stroke-width="1"/>
       <rect x="-5" y="92" width="60" height="7" fill="rgba(13,11,10,0.9)" stroke="rgba(184,180,168,0.07)" stroke-width="0.6"/>
     </g>
 
-    <!-- RITUAL PENTAGRAM on ground (faint) -->
     <g transform="translate(700,555)" opacity="0.12">
       <circle cx="0" cy="0" r="45" stroke="rgba(184,180,168,0.5)" stroke-width="0.6" fill="none"/>
       <polygon points="0,-40 38,13 -24,32 24,32 -38,13" fill="none" stroke="rgba(184,180,168,0.5)" stroke-width="0.6"/>
     </g>
 
-    <!-- DEAD TREES - foreground left -->
     <g opacity="0.7">
       <line x1="150" y1="600" x2="145" y2="300" stroke="#0e0e0c" stroke-width="8"/>
       <line x1="145" y1="350" x2="80" y2="240" stroke="#0e0e0c" stroke-width="5"/>
@@ -714,7 +678,6 @@ html,body{
       <line x1="145" y1="420" x2="95" y2="360" stroke="#0e0e0c" stroke-width="3.5"/>
     </g>
 
-    <!-- DEAD TREES - foreground right -->
     <g opacity="0.7">
       <line x1="1250" y1="600" x2="1255" y2="295" stroke="#0e0e0c" stroke-width="8"/>
       <line x1="1255" y1="345" x2="1320" y2="235" stroke="#0e0e0c" stroke-width="5"/>
@@ -727,41 +690,28 @@ html,body{
       <line x1="1200" y1="290" x2="1225" y2="260" stroke="#0e0e0c" stroke-width="2"/>
     </g>
 
-    <!-- DOOR / GATE of cemetery -->
     <g transform="translate(560,360)" opacity="0.55">
-      <!-- gate pillars -->
       <rect x="0" y="0" width="18" height="180" fill="rgba(15,13,12,0.95)" stroke="rgba(184,180,168,0.15)" stroke-width="0.8"/>
       <rect x="262" y="0" width="18" height="180" fill="rgba(15,13,12,0.95)" stroke="rgba(184,180,168,0.15)" stroke-width="0.8"/>
-      <!-- pillar caps -->
       <path d="M-4 0 L22 0 L22 -12 L9 -20 L-4 -12 Z" fill="rgba(18,16,14,0.9)" stroke="rgba(184,180,168,0.12)" stroke-width="0.7"/>
       <path d="M258 0 L284 0 L284 -12 L271 -20 L258 -12 Z" fill="rgba(18,16,14,0.9)" stroke="rgba(184,180,168,0.12)" stroke-width="0.7"/>
-      <!-- left gate door -->
       <rect x="22" y="10" width="115" height="168" fill="rgba(12,10,9,0.6)" stroke="rgba(184,180,168,0.1)" stroke-width="0.7"/>
-      <!-- door panels left -->
       <rect x="30" y="18" width="48" height="72" fill="none" stroke="rgba(184,180,168,0.08)" stroke-width="0.6"/>
       <rect x="30" y="100" width="48" height="70" fill="none" stroke="rgba(184,180,168,0.08)" stroke-width="0.6"/>
-      <!-- right gate door -->
       <rect x="143" y="10" width="115" height="168" fill="rgba(12,10,9,0.5)" stroke="rgba(184,180,168,0.1)" stroke-width="0.7"/>
-      <!-- door panels right -->
       <rect x="152" y="18" width="48" height="72" fill="none" stroke="rgba(184,180,168,0.08)" stroke-width="0.6"/>
       <rect x="152" y="100" width="48" height="70" fill="none" stroke="rgba(184,180,168,0.08)" stroke-width="0.6"/>
-      <!-- arch over gate -->
       <path d="M0 0 Q140 -80 280 0" fill="none" stroke="rgba(184,180,168,0.15)" stroke-width="1.2"/>
     </g>
 
-    <!-- WINDOW - broken church wall remnant -->
     <g transform="translate(1100,300)" opacity="0.4">
       <rect x="0" y="0" width="60" height="90" fill="rgba(10,9,8,0.5)" stroke="rgba(184,180,168,0.15)" stroke-width="1"/>
-      <!-- gothic arch top -->
       <path d="M0 30 Q30 0 60 30" fill="rgba(8,7,6,0.3)" stroke="rgba(184,180,168,0.12)" stroke-width="0.8"/>
-      <!-- broken pieces -->
       <line x1="15" y1="0" x2="25" y2="40" stroke="rgba(184,180,168,0.1)" stroke-width="1"/>
       <line x1="45" y1="0" x2="38" y2="35" stroke="rgba(184,180,168,0.08)" stroke-width="0.8"/>
-      <!-- light through window -->
       <path d="M5 35 Q30 8 55 35 L50 80 L10 80 Z" fill="rgba(200,180,100,0.02)"/>
     </g>
 
-    <!-- another broken window left -->
     <g transform="translate(240,310)" opacity="0.35">
       <rect x="0" y="0" width="50" height="80" fill="rgba(10,9,8,0.5)" stroke="rgba(184,180,168,0.12)" stroke-width="0.9"/>
       <path d="M0 25 Q25 0 50 25" fill="rgba(8,7,6,0.3)" stroke="rgba(184,180,168,0.1)" stroke-width="0.7"/>
@@ -771,7 +721,6 @@ html,body{
 </div>
 
 <!-- CANDLES -->
-<!-- left cluster -->
 <div class="candle-wrap" style="left:4%;--cw:12px;--wh:7px;--fw:9px;--fd:2.6s;--fdelay:0s">
   <div class="flame"><div class="flame-glow"></div><div class="flame-inner" style="height:18px"></div></div>
   <div class="candle-body" style="height:55px"></div>
@@ -784,8 +733,6 @@ html,body{
   <div class="flame"><div class="flame-glow"></div><div class="flame-inner" style="height:13px"></div></div>
   <div class="candle-body" style="height:30px"></div>
 </div>
-
-<!-- right cluster -->
 <div class="candle-wrap" style="right:4%;--cw:12px;--wh:7px;--fw:9px;--fd:2.8s;--fdelay:0.2s">
   <div class="flame"><div class="flame-glow"></div><div class="flame-inner" style="height:18px"></div></div>
   <div class="candle-body" style="height:50px"></div>
@@ -803,40 +750,26 @@ html,body{
 <div id="lantern">
   <div class="lantern-glow"></div>
   <svg width="36" height="60" viewBox="0 0 36 60" xmlns="http://www.w3.org/2000/svg" fill="none">
-    <!-- chain -->
     <line x1="18" y1="0" x2="18" y2="8" stroke="rgba(184,180,168,0.4)" stroke-width="1.5"/>
     <circle cx="18" cy="10" r="3" fill="none" stroke="rgba(184,180,168,0.35)" stroke-width="1"/>
-    <!-- lantern body -->
-    <path d="M6 14 L6 48 Q6 54 12 54 L24 54 Q30 54 30 48 L30 14 Z"
-      fill="rgba(20,16,8,0.85)" stroke="rgba(200,160,40,0.4)" stroke-width="1"/>
-    <!-- glass panels -->
+    <path d="M6 14 L6 48 Q6 54 12 54 L24 54 Q30 54 30 48 L30 14 Z" fill="rgba(20,16,8,0.85)" stroke="rgba(200,160,40,0.4)" stroke-width="1"/>
     <line x1="6" y1="14" x2="6" y2="48" stroke="rgba(200,160,40,0.25)" stroke-width="0.8"/>
     <line x1="30" y1="14" x2="30" y2="48" stroke="rgba(200,160,40,0.25)" stroke-width="0.8"/>
     <line x1="18" y1="14" x2="18" y2="48" stroke="rgba(200,160,40,0.15)" stroke-width="0.5"/>
-    <!-- top cap -->
     <path d="M4 14 L18 6 L32 14 Z" fill="rgba(180,140,30,0.5)" stroke="rgba(200,160,40,0.4)" stroke-width="0.8"/>
-    <!-- bottom cap -->
     <path d="M4 48 L18 56 L32 48" fill="rgba(180,140,30,0.5)" stroke="rgba(200,160,40,0.4)" stroke-width="0.8"/>
-    <!-- inner flame glow -->
-    <ellipse cx="18" cy="31" rx="6" ry="8"
-      fill="rgba(245,200,66,0.12)"
-      style="animation:lantflame 2.5s ease-in-out infinite"/>
-    <ellipse cx="18" cy="33" rx="3" ry="4"
-      fill="rgba(245,200,66,0.18)"
-      style="animation:lantflame 2.5s ease-in-out infinite 0.3s"/>
+    <ellipse cx="18" cy="31" rx="6" ry="8" fill="rgba(245,200,66,0.12)" style="animation:lantflame 2.5s ease-in-out infinite"/>
+    <ellipse cx="18" cy="33" rx="3" ry="4" fill="rgba(245,200,66,0.18)" style="animation:lantflame 2.5s ease-in-out infinite 0.3s"/>
   </svg>
 </div>
 
 <!-- HANDS -->
 <div class="hand-wrap" style="left:8%;--hd:14s;--hdelay:0s;--hrise:-55px">
   <svg width="55" height="100" viewBox="0 0 55 100" xmlns="http://www.w3.org/2000/svg" fill="none">
-    <path d="M20 100 L18 55 Q17 48 20 46 Q22 44 24 46 L25 40 Q24 33 27 32 Q30 31 31 37 L32 30 Q31 23 34 22 Q37 21 38 28 L39 26 Q38 19 41 18 Q44 17 45 24 L46 60 L50 52 Q52 46 55 48 Q58 50 55 58 L50 75 Q48 82 46 85 L45 100 Z"
-      fill="rgba(25,22,18,0.92)" stroke="rgba(184,180,168,0.12)" stroke-width="0.8"/>
-    <!-- knuckle lines -->
+    <path d="M20 100 L18 55 Q17 48 20 46 Q22 44 24 46 L25 40 Q24 33 27 32 Q30 31 31 37 L32 30 Q31 23 34 22 Q37 21 38 28 L39 26 Q38 19 41 18 Q44 17 45 24 L46 60 L50 52 Q52 46 55 48 Q58 50 55 58 L50 75 Q48 82 46 85 L45 100 Z" fill="rgba(25,22,18,0.92)" stroke="rgba(184,180,168,0.12)" stroke-width="0.8"/>
     <line x1="24" y1="60" x2="28" y2="58" stroke="rgba(184,180,168,0.06)" stroke-width="0.5"/>
     <line x1="31" y1="55" x2="35" y2="53" stroke="rgba(184,180,168,0.06)" stroke-width="0.5"/>
     <line x1="38" y1="53" x2="42" y2="52" stroke="rgba(184,180,168,0.06)" stroke-width="0.5"/>
-    <!-- fingernails hint -->
     <path d="M23 46 Q24 43 26 44" stroke="rgba(184,180,168,0.08)" stroke-width="0.6" fill="none"/>
     <path d="M30 37 Q31 34 33 35" stroke="rgba(184,180,168,0.08)" stroke-width="0.6" fill="none"/>
     <path d="M37 28 Q38 25 40 26" stroke="rgba(184,180,168,0.08)" stroke-width="0.6" fill="none"/>
@@ -845,37 +778,32 @@ html,body{
 </div>
 <div class="hand-wrap" style="right:9%;--hd:18s;--hdelay:3s;--hrise:-45px">
   <svg width="50" height="95" viewBox="0 0 55 100" xmlns="http://www.w3.org/2000/svg" fill="none" transform="scale(-1,1)">
-    <path d="M20 100 L18 55 Q17 48 20 46 Q22 44 24 46 L25 40 Q24 33 27 32 Q30 31 31 37 L32 30 Q31 23 34 22 Q37 21 38 28 L39 26 Q38 19 41 18 Q44 17 45 24 L46 60 L50 52 Q52 46 55 48 Q58 50 55 58 L50 75 Q48 82 46 85 L45 100 Z"
-      fill="rgba(22,19,16,0.9)" stroke="rgba(184,180,168,0.1)" stroke-width="0.8"/>
+    <path d="M20 100 L18 55 Q17 48 20 46 Q22 44 24 46 L25 40 Q24 33 27 32 Q30 31 31 37 L32 30 Q31 23 34 22 Q37 21 38 28 L39 26 Q38 19 41 18 Q44 17 45 24 L46 60 L50 52 Q52 46 55 48 Q58 50 55 58 L50 75 Q48 82 46 85 L45 100 Z" fill="rgba(22,19,16,0.9)" stroke="rgba(184,180,168,0.1)" stroke-width="0.8"/>
   </svg>
 </div>
 <div class="hand-wrap" style="left:22%;--hd:22s;--hdelay:7s;--hrise:-30px">
   <svg width="40" height="80" viewBox="0 0 55 100" xmlns="http://www.w3.org/2000/svg" fill="none">
-    <path d="M20 100 L18 55 Q17 48 20 46 Q22 44 24 46 L25 40 Q24 33 27 32 Q30 31 31 37 L32 30 Q31 23 34 22 Q37 21 38 28 L46 60 L50 52 Q52 46 55 48 Q58 50 55 58 L50 75 L45 100 Z"
-      fill="rgba(20,18,15,0.88)" stroke="rgba(184,180,168,0.09)" stroke-width="0.7"/>
+    <path d="M20 100 L18 55 Q17 48 20 46 Q22 44 24 46 L25 40 Q24 33 27 32 Q30 31 31 37 L32 30 Q31 23 34 22 Q37 21 38 28 L46 60 L50 52 Q52 46 55 48 Q58 50 55 58 L50 75 L45 100 Z" fill="rgba(20,18,15,0.88)" stroke="rgba(184,180,168,0.09)" stroke-width="0.7"/>
   </svg>
 </div>
 <div class="hand-wrap" style="right:20%;--hd:16s;--hdelay:10s;--hrise:-35px">
   <svg width="42" height="82" viewBox="0 0 55 100" xmlns="http://www.w3.org/2000/svg" fill="none" transform="scale(-1,1)">
-    <path d="M20 100 L18 55 Q17 48 20 46 Q22 44 24 46 L25 40 Q24 33 27 32 Q30 31 31 37 L32 30 Q31 23 34 22 Q37 21 38 28 L46 60 L50 52 Q52 46 55 48 Q58 50 55 58 L50 75 L45 100 Z"
-      fill="rgba(20,18,15,0.85)" stroke="rgba(184,180,168,0.08)" stroke-width="0.7"/>
+    <path d="M20 100 L18 55 Q17 48 20 46 Q22 44 24 46 L25 40 Q24 33 27 32 Q30 31 31 37 L32 30 Q31 23 34 22 Q37 21 38 28 L46 60 L50 52 Q52 46 55 48 Q58 50 55 58 L50 75 L45 100 Z" fill="rgba(20,18,15,0.85)" stroke="rgba(184,180,168,0.08)" stroke-width="0.7"/>
   </svg>
 </div>
 
 <!-- SHADOW FIGURE -->
 <svg id="shadow-figure" width="60" height="180" viewBox="0 0 60 180" xmlns="http://www.w3.org/2000/svg" fill="none">
-  <!-- hooded figure -->
   <ellipse cx="30" cy="22" rx="14" ry="16" fill="rgba(5,4,3,0.9)"/>
   <path d="M16 35 Q8 80 10 180 L50 180 Q52 80 44 35 Z" fill="rgba(5,4,3,0.88)"/>
   <path d="M10 70 Q0 80 2 110 L12 105 Q10 88 15 80 Z" fill="rgba(5,4,3,0.75)"/>
   <path d="M50 70 Q60 80 58 110 L48 105 Q50 88 45 80 Z" fill="rgba(5,4,3,0.75)"/>
-  <!-- eye glow -->
   <ellipse cx="24" cy="20" rx="2" ry="2.5" fill="rgba(200,196,184,0.08)"/>
   <ellipse cx="36" cy="20" rx="2" ry="2.5" fill="rgba(200,196,184,0.08)"/>
 </svg>
 
 <!-- MEMORY MESSAGE -->
-<div id="memory-msg" id="mem-msg"></div>
+<div id="memory-msg"></div>
 
 <!-- ══════════ MAIN CONTENT ══════════ -->
 <div id="content">
@@ -883,88 +811,41 @@ html,body{
   <!-- BAPHOMET HEAD -->
   <div class="ritual-ring">
     <svg viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg" fill="none">
-      <!-- outer ritual circles -->
       <circle cx="110" cy="110" r="105" stroke="rgba(184,180,168,0.07)" stroke-width="0.8" stroke-dasharray="3 6"/>
       <circle cx="110" cy="110" r="98" stroke="rgba(184,180,168,0.05)" stroke-width="0.5"/>
-      <!-- pentagram -->
-      <polygon points="110,12 200,78 165,185 55,185 20,78"
-        fill="none" stroke="rgba(184,180,168,0.1)" stroke-width="0.8"/>
-      <!-- inner pentagon -->
-      <polygon points="110,52 163,88 143,148 77,148 57,88"
-        fill="none" stroke="rgba(184,180,168,0.06)" stroke-width="0.6"/>
-      <!-- rune letters around -->
+      <polygon points="110,12 200,78 165,185 55,185 20,78" fill="none" stroke="rgba(184,180,168,0.1)" stroke-width="0.8"/>
+      <polygon points="110,52 163,88 143,148 77,148 57,88" fill="none" stroke="rgba(184,180,168,0.06)" stroke-width="0.6"/>
       <text x="110" y="8" text-anchor="middle" fill="rgba(184,180,168,0.18)" font-size="7" font-family="serif">ᛒ</text>
       <text x="205" y="82" text-anchor="middle" fill="rgba(184,180,168,0.18)" font-size="7" font-family="serif">ᚨ</text>
       <text x="172" y="196" text-anchor="middle" fill="rgba(184,180,168,0.18)" font-size="7" font-family="serif">ᚠ</text>
       <text x="48" y="196" text-anchor="middle" fill="rgba(184,180,168,0.18)" font-size="7" font-family="serif">ᛟ</text>
       <text x="14" y="82" text-anchor="middle" fill="rgba(184,180,168,0.18)" font-size="7" font-family="serif">ᛗ</text>
-
-      <!-- BAPHOMET HEAD -->
-      <!-- base head/skull -->
-      <path d="M110 48 C82 48 60 68 60 92 C60 112 72 128 90 135 L90 152 C90 156 93 158 97 158 L123 158 C127 158 130 156 130 152 L130 135 C148 128 160 112 160 92 C160 68 138 48 110 48 Z"
-        fill="rgba(14,12,10,0.97)" stroke="rgba(184,180,168,0.2)" stroke-width="1"/>
-
-      <!-- HORNS — baphomet distinctive -->
-      <!-- left horn -->
-      <path d="M72 72 Q55 45 48 22 Q52 20 58 25 Q62 45 78 68 Z"
-        fill="rgba(22,20,18,0.95)" stroke="rgba(184,180,168,0.18)" stroke-width="1"/>
-      <path d="M72 72 Q60 50 62 28 Q64 26 66 28 Q65 50 75 70 Z"
-        fill="rgba(18,16,14,0.9)" stroke="rgba(184,180,168,0.1)" stroke-width="0.6"/>
-      <!-- right horn -->
-      <path d="M148 72 Q165 45 172 22 Q168 20 162 25 Q158 45 142 68 Z"
-        fill="rgba(22,20,18,0.95)" stroke="rgba(184,180,168,0.18)" stroke-width="1"/>
-      <path d="M148 72 Q160 50 158 28 Q156 26 154 28 Q155 50 145 70 Z"
-        fill="rgba(18,16,14,0.9)" stroke="rgba(184,180,168,0.1)" stroke-width="0.6"/>
-
-      <!-- left eye — burning -->
-      <ellipse cx="90" cy="96" rx="14" ry="15"
-        fill="rgba(5,4,3,0.98)" stroke="rgba(184,180,168,0.18)" stroke-width="1"/>
+      <path d="M110 48 C82 48 60 68 60 92 C60 112 72 128 90 135 L90 152 C90 156 93 158 97 158 L123 158 C127 158 130 156 130 152 L130 135 C148 128 160 112 160 92 C160 68 138 48 110 48 Z" fill="rgba(14,12,10,0.97)" stroke="rgba(184,180,168,0.2)" stroke-width="1"/>
+      <path d="M72 72 Q55 45 48 22 Q52 20 58 25 Q62 45 78 68 Z" fill="rgba(22,20,18,0.95)" stroke="rgba(184,180,168,0.18)" stroke-width="1"/>
+      <path d="M72 72 Q60 50 62 28 Q64 26 66 28 Q65 50 75 70 Z" fill="rgba(18,16,14,0.9)" stroke="rgba(184,180,168,0.1)" stroke-width="0.6"/>
+      <path d="M148 72 Q165 45 172 22 Q168 20 162 25 Q158 45 142 68 Z" fill="rgba(22,20,18,0.95)" stroke="rgba(184,180,168,0.18)" stroke-width="1"/>
+      <path d="M148 72 Q160 50 158 28 Q156 26 154 28 Q155 50 145 70 Z" fill="rgba(18,16,14,0.9)" stroke="rgba(184,180,168,0.1)" stroke-width="0.6"/>
+      <ellipse cx="90" cy="96" rx="14" ry="15" fill="rgba(5,4,3,0.98)" stroke="rgba(184,180,168,0.18)" stroke-width="1"/>
       <ellipse cx="90" cy="97" rx="8" ry="9" fill="rgba(184,180,168,0.04)"/>
-      <ellipse cx="90" cy="96" rx="4" ry="5"
-        fill="rgba(200,196,184,0.1)"
-        style="animation:baph-eye 3s ease-in-out infinite"/>
+      <ellipse cx="90" cy="96" rx="4" ry="5" fill="rgba(200,196,184,0.1)" style="animation:baph-eye 3s ease-in-out infinite"/>
       <ellipse cx="90" cy="95" rx="2" ry="2.5" fill="rgba(200,196,184,0.15)"/>
-
-      <!-- right eye — burning -->
-      <ellipse cx="130" cy="96" rx="14" ry="15"
-        fill="rgba(5,4,3,0.98)" stroke="rgba(184,180,168,0.18)" stroke-width="1"/>
+      <ellipse cx="130" cy="96" rx="14" ry="15" fill="rgba(5,4,3,0.98)" stroke="rgba(184,180,168,0.18)" stroke-width="1"/>
       <ellipse cx="130" cy="97" rx="8" ry="9" fill="rgba(184,180,168,0.04)"/>
-      <ellipse cx="130" cy="96" rx="4" ry="5"
-        fill="rgba(200,196,184,0.1)"
-        style="animation:baph-eye 3s ease-in-out infinite 0.5s"/>
+      <ellipse cx="130" cy="96" rx="4" ry="5" fill="rgba(200,196,184,0.1)" style="animation:baph-eye 3s ease-in-out infinite 0.5s"/>
       <ellipse cx="130" cy="95" rx="2" ry="2.5" fill="rgba(200,196,184,0.15)"/>
-
-      <!-- third eye / forehead mark -->
-      <ellipse cx="110" cy="74" rx="5" ry="7"
-        fill="rgba(5,4,3,0.98)" stroke="rgba(184,180,168,0.15)" stroke-width="0.8"/>
-      <ellipse cx="110" cy="74" rx="2.5" ry="3.5"
-        fill="rgba(200,196,184,0.2)"
-        style="animation:thirdeye 4s ease-in-out infinite"/>
-
-      <!-- nose -->
-      <path d="M104 112 L110 104 L116 112 Q113 117 110 118 Q107 117 104 112 Z"
-        fill="rgba(5,4,3,0.95)" stroke="rgba(184,180,168,0.1)" stroke-width="0.7"/>
-
-      <!-- goat beard hint -->
-      <path d="M95 136 Q110 148 125 136 Q120 145 110 150 Q100 145 95 136 Z"
-        fill="rgba(18,16,14,0.8)" stroke="rgba(184,180,168,0.1)" stroke-width="0.7"/>
-
-      <!-- teeth — baphomet grin -->
+      <ellipse cx="110" cy="74" rx="5" ry="7" fill="rgba(5,4,3,0.98)" stroke="rgba(184,180,168,0.15)" stroke-width="0.8"/>
+      <ellipse cx="110" cy="74" rx="2.5" ry="3.5" fill="rgba(200,196,184,0.2)" style="animation:thirdeye 4s ease-in-out infinite"/>
+      <path d="M104 112 L110 104 L116 112 Q113 117 110 118 Q107 117 104 112 Z" fill="rgba(5,4,3,0.95)" stroke="rgba(184,180,168,0.1)" stroke-width="0.7"/>
+      <path d="M95 136 Q110 148 125 136 Q120 145 110 150 Q100 145 95 136 Z" fill="rgba(18,16,14,0.8)" stroke="rgba(184,180,168,0.1)" stroke-width="0.7"/>
       <line x1="92" y1="126" x2="128" y2="126" stroke="rgba(184,180,168,0.12)" stroke-width="0.8"/>
       <rect x="94" y="126" width="7" height="11" rx="0.5" fill="rgba(210,205,195,0.08)" stroke="rgba(184,180,168,0.15)" stroke-width="0.7"/>
       <rect x="103" y="126" width="7" height="13" rx="0.5" fill="rgba(210,205,195,0.08)" stroke="rgba(184,180,168,0.15)" stroke-width="0.7"/>
       <rect x="112" y="126" width="7" height="12" rx="0.5" fill="rgba(210,205,195,0.08)" stroke="rgba(184,180,168,0.15)" stroke-width="0.7"/>
       <rect x="121" y="126" width="7" height="11" rx="0.5" fill="rgba(210,205,195,0.08)" stroke="rgba(184,180,168,0.15)" stroke-width="0.7"/>
-
-      <!-- ritual star on forehead -->
       <text x="110" y="90" text-anchor="middle" fill="rgba(184,180,168,0.08)" font-size="22" font-family="serif">☆</text>
-
-      <!-- cracks -->
       <path d="M110 52 L107 68 L113 76" stroke="rgba(184,180,168,0.08)" stroke-width="0.7" fill="none"/>
       <path d="M72 80 L79 86 L76 94" stroke="rgba(184,180,168,0.06)" stroke-width="0.6" fill="none"/>
       <path d="M148 80 L141 87 L144 95" stroke="rgba(184,180,168,0.06)" stroke-width="0.6" fill="none"/>
-
-      <!-- inverted cross below face -->
       <line x1="110" y1="162" x2="110" y2="205" stroke="rgba(184,180,168,0.15)" stroke-width="1.2"/>
       <line x1="98" y1="190" x2="122" y2="190" stroke="rgba(184,180,168,0.15)" stroke-width="1.2"/>
     </svg>
@@ -982,7 +863,6 @@ html,body{
       <line x1="0" y1="14" x2="580" y2="14" stroke="rgba(184,180,168,0.08)" stroke-width="0.8"/>
       <path d="M0 14 L90 14" stroke="rgba(184,180,168,0.2)" stroke-width="1"/>
       <path d="M92 14 L98 7 L104 14 L98 21 Z" fill="none" stroke="rgba(184,180,168,0.2)" stroke-width="0.8"/>
-      <!-- center pentagram small -->
       <polygon points="290,4 298,20 280,10 300,10 282,20" fill="none" stroke="rgba(184,180,168,0.15)" stroke-width="0.7"/>
       <path d="M476 14 L482 7 L488 14 L482 21 Z" fill="none" stroke="rgba(184,180,168,0.2)" stroke-width="0.8"/>
       <path d="M490 14 L580 14" stroke="rgba(184,180,168,0.2)" stroke-width="1"/>
@@ -1030,7 +910,6 @@ html,body{
   <div class="soc-section">
     <div class="soc-title">أبواب المطور — ${SOCIAL.devName}</div>
     <div class="soc-grid">
-      <!-- Instagram -->
       <a class="soc-link" href="${SOCIAL.instagram}" target="_blank" data-name="Instagram">
         <svg class="soc-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="rgba(184,180,168,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <rect x="2" y="2" width="20" height="20" rx="5"/>
@@ -1039,21 +918,18 @@ html,body{
         </svg>
         <div><div class="soc-name">Instagram</div><div class="soc-handle">@x_v_k1</div></div>
       </a>
-      <!-- Facebook -->
       <a class="soc-link" href="${SOCIAL.facebook}" target="_blank" data-name="Facebook">
         <svg class="soc-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="rgba(184,180,168,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/>
         </svg>
         <div><div class="soc-name">Facebook</div><div class="soc-handle">أيمن</div></div>
       </a>
-      <!-- Telegram -->
       <a class="soc-link" href="${SOCIAL.telegram}" target="_blank" data-name="Telegram">
         <svg class="soc-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="rgba(184,180,168,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>
         </svg>
         <div><div class="soc-name">Telegram</div><div class="soc-handle">@X2_FD</div></div>
       </a>
-      <!-- TikTok -->
       <a class="soc-link" href="${SOCIAL.tiktok}" target="_blank" data-name="TikTok">
         <svg class="soc-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="rgba(184,180,168,0.6)">
           <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.53V6.77a4.85 4.85 0 01-1.01-.08z"/>
@@ -1069,27 +945,16 @@ html,body{
     <a class="dev-link" href="${SOCIAL.facebook}" target="_blank">
       <svg class="dev-svg" width="80" height="120" viewBox="0 0 80 120" xmlns="http://www.w3.org/2000/svg" fill="none"
         style="transition:filter 0.3s;filter:drop-shadow(0 0 8px rgba(184,180,168,0.06))">
-        <!-- hooded figure with scythe -->
-        <!-- robe -->
-        <path d="M40 8 C25 8 14 18 14 32 C14 44 21 53 32 58 L32 65 C32 67 34 68 36 68 L44 68 C46 68 48 67 48 65 L48 58 C59 53 66 44 66 32 C66 18 55 8 40 8 Z"
-          fill="rgba(12,10,8,0.95)" stroke="rgba(184,180,168,0.15)" stroke-width="0.8"/>
-        <!-- robe body extends down -->
-        <path d="M32 65 Q22 80 18 120 L62 120 Q58 80 48 65 Z"
-          fill="rgba(10,8,6,0.95)" stroke="rgba(184,180,168,0.1)" stroke-width="0.7"/>
-        <!-- hood -->
+        <path d="M40 8 C25 8 14 18 14 32 C14 44 21 53 32 58 L32 65 C32 67 34 68 36 68 L44 68 C46 68 48 67 48 65 L48 58 C59 53 66 44 66 32 C66 18 55 8 40 8 Z" fill="rgba(12,10,8,0.95)" stroke="rgba(184,180,168,0.15)" stroke-width="0.8"/>
+        <path d="M32 65 Q22 80 18 120 L62 120 Q58 80 48 65 Z" fill="rgba(10,8,6,0.95)" stroke="rgba(184,180,168,0.1)" stroke-width="0.7"/>
         <ellipse cx="40" cy="24" rx="18" ry="16" fill="rgba(8,6,4,0.92)" stroke="rgba(184,180,168,0.12)" stroke-width="0.8"/>
-        <!-- face void -->
         <ellipse cx="40" cy="28" rx="11" ry="10" fill="rgba(3,2,1,0.99)"/>
-        <!-- eyes -->
         <ellipse cx="35" cy="27" rx="2.5" ry="3" fill="rgba(200,196,184,0.15)" style="animation:baph-eye 3s ease-in-out infinite"/>
         <ellipse cx="45" cy="27" rx="2.5" ry="3" fill="rgba(200,196,184,0.15)" style="animation:baph-eye 3s ease-in-out infinite 0.4s"/>
-        <!-- scythe -->
         <line x1="55" y1="110" x2="72" y2="15" stroke="rgba(184,180,168,0.22)" stroke-width="1.5"/>
         <path d="M72 15 Q88 2 78 10 Q68 18 62 24" fill="none" stroke="rgba(184,180,168,0.28)" stroke-width="1.5"/>
-        <!-- robe folds -->
         <path d="M20 75 Q14 85 16 110" stroke="rgba(184,180,168,0.06)" stroke-width="0.6" fill="none"/>
         <path d="M60 75 Q66 85 64 110" stroke="rgba(184,180,168,0.06)" stroke-width="0.6" fill="none"/>
-        <!-- text -->
         <text x="40" y="118" text-anchor="middle" fill="rgba(184,180,168,0.18)" font-size="5.5" font-family="serif" letter-spacing="1">الصانع</text>
       </svg>
     </a>
@@ -1143,7 +1008,6 @@ for(let i=0;i<TRAIL_LEN;i++){
 document.addEventListener('mousemove',e=>{
   mx=e.clientX; my=e.clientY;
   cursor.style.left=mx+'px'; cursor.style.top=my+'px';
-  // blood drop
   if(Math.random()>0.85){
     const b=document.createElement('div');
     b.className='blood-drop';
@@ -1180,21 +1044,19 @@ trackEyes();
 
 function spawnEyes(near){
   const rect=near.getBoundingClientRect();
-  // spawn 2 eyes near the element
   for(let i=0;i<2;i++){
     const ep=document.createElement('div');
     ep.className='eye-pair';
     ep.style.left=(rect.left-30+Math.random()*20)+'px';
     ep.style.top=(rect.top-20+Math.random()*40)+'px';
-    ep.innerHTML=`
-      <svg width="40" height="18" viewBox="0 0 40 18" xmlns="http://www.w3.org/2000/svg" fill="none">
-        <ellipse cx="10" cy="9" rx="9" ry="8" fill="rgba(3,2,1,0.9)" stroke="rgba(184,180,168,0.25)" stroke-width="0.8"/>
-        <ellipse cx="10" cy="9" rx="4" ry="5" fill="rgba(184,180,168,0.12)"/>
-        <ellipse cx="10" cy="9" rx="2" ry="2.5" fill="rgba(200,196,184,0.25)"/>
-        <ellipse cx="30" cy="9" rx="9" ry="8" fill="rgba(3,2,1,0.9)" stroke="rgba(184,180,168,0.25)" stroke-width="0.8"/>
-        <ellipse cx="30" cy="9" rx="4" ry="5" fill="rgba(184,180,168,0.12)"/>
-        <ellipse cx="30" cy="9" rx="2" ry="2.5" fill="rgba(200,196,184,0.25)"/>
-      </svg>`;
+    ep.innerHTML='<svg width="40" height="18" viewBox="0 0 40 18" xmlns="http://www.w3.org/2000/svg" fill="none">'
+      +'<ellipse cx="10" cy="9" rx="9" ry="8" fill="rgba(3,2,1,0.9)" stroke="rgba(184,180,168,0.25)" stroke-width="0.8"/>'
+      +'<ellipse cx="10" cy="9" rx="4" ry="5" fill="rgba(184,180,168,0.12)"/>'
+      +'<ellipse cx="10" cy="9" rx="2" ry="2.5" fill="rgba(200,196,184,0.25)"/>'
+      +'<ellipse cx="30" cy="9" rx="9" ry="8" fill="rgba(3,2,1,0.9)" stroke="rgba(184,180,168,0.25)" stroke-width="0.8"/>'
+      +'<ellipse cx="30" cy="9" rx="4" ry="5" fill="rgba(184,180,168,0.12)"/>'
+      +'<ellipse cx="30" cy="9" rx="2" ry="2.5" fill="rgba(200,196,184,0.25)"/>'
+      +'</svg>';
     document.body.appendChild(ep);
     setTimeout(()=>ep.remove(),1300);
   }
@@ -1208,16 +1070,16 @@ setInterval(()=>{
   ep.className='eye-pair';
   ep.style.left=Math.random()*85+'%';
   ep.style.top=(5+Math.random()*75)+'%';
-  // random dart speed
   const dur=0.4+Math.random()*0.8;
   ep.style.animationDuration=dur+'s';
-  ep.innerHTML=`
-    <svg width="${22+Math.random()*20}" height="${10+Math.random()*8}" viewBox="0 0 40 18" xmlns="http://www.w3.org/2000/svg" fill="none">
-      <ellipse cx="10" cy="9" rx="9" ry="8" fill="rgba(3,2,1,0.95)" stroke="rgba(184,180,168,0.2)" stroke-width="0.8"/>
-      <ellipse cx="10" cy="9" rx="3.5" ry="4.5" fill="rgba(184,180,168,0.08)"/>
-      <ellipse cx="30" cy="9" rx="9" ry="8" fill="rgba(3,2,1,0.95)" stroke="rgba(184,180,168,0.2)" stroke-width="0.8"/>
-      <ellipse cx="30" cy="9" rx="3.5" ry="4.5" fill="rgba(184,180,168,0.08)"/>
-    </svg>`;
+  const w=22+Math.random()*20;
+  const h=10+Math.random()*8;
+  ep.innerHTML='<svg width="'+w+'" height="'+h+'" viewBox="0 0 40 18" xmlns="http://www.w3.org/2000/svg" fill="none">'
+    +'<ellipse cx="10" cy="9" rx="9" ry="8" fill="rgba(3,2,1,0.95)" stroke="rgba(184,180,168,0.2)" stroke-width="0.8"/>'
+    +'<ellipse cx="10" cy="9" rx="3.5" ry="4.5" fill="rgba(184,180,168,0.08)"/>'
+    +'<ellipse cx="30" cy="9" rx="9" ry="8" fill="rgba(3,2,1,0.95)" stroke="rgba(184,180,168,0.2)" stroke-width="0.8"/>'
+    +'<ellipse cx="30" cy="9" rx="3.5" ry="4.5" fill="rgba(184,180,168,0.08)"/>'
+    +'</svg>';
   document.body.appendChild(ep);
   setTimeout(()=>ep.remove(),dur*1000+200);
 },900);
@@ -1226,58 +1088,43 @@ setInterval(()=>{
    DISTORTED FACES
 ════════════════════════════════════════ */
 const faces=[
-  // face 1
-  `<svg viewBox="0 0 80 90" xmlns="http://www.w3.org/2000/svg" fill="none">
-    <ellipse cx="40" cy="42" rx="32" ry="38" fill="rgba(8,7,6,0.85)" stroke="rgba(184,180,168,0.1)" stroke-width="0.8"/>
-    <ellipse cx="27" cy="36" rx="10" ry="12" fill="rgba(3,2,1,0.95)" stroke="rgba(184,180,168,0.12)" stroke-width="0.7"/>
-    <ellipse cx="27" cy="36" rx="4" ry="6" fill="rgba(184,180,168,0.12)"/>
-    <ellipse cx="53" cy="36" rx="10" ry="12" fill="rgba(3,2,1,0.95)" stroke="rgba(184,180,168,0.12)" stroke-width="0.7"/>
-    <ellipse cx="53" cy="36" rx="4" ry="6" fill="rgba(184,180,168,0.12)"/>
-    <path d="M28 65 Q40 72 52 65" stroke="rgba(184,180,168,0.1)" stroke-width="0.8" fill="none"/>
-    <path d="M32 65 L35 73 M40 66 L40 75 M48 65 L45 73" stroke="rgba(184,180,168,0.08)" stroke-width="0.5"/>
-  </svg>`,
-  // face 2 — screaming
-  `<svg viewBox="0 0 70 80" xmlns="http://www.w3.org/2000/svg" fill="none">
-    <path d="M35 5 C15 5 5 22 5 40 C5 58 15 72 35 72 C55 72 65 58 65 40 C65 22 55 5 35 5 Z"
-      fill="rgba(10,8,7,0.88)" stroke="rgba(184,180,168,0.1)" stroke-width="0.8"/>
-    <ellipse cx="22" cy="32" rx="9" ry="11" fill="rgba(2,1,1,0.98)" stroke="rgba(184,180,168,0.1)" stroke-width="0.7"/>
-    <ellipse cx="22" cy="32" rx="3" ry="5" fill="rgba(184,180,168,0.08)"/>
-    <ellipse cx="48" cy="32" rx="9" ry="11" fill="rgba(2,1,1,0.98)" stroke="rgba(184,180,168,0.1)" stroke-width="0.7"/>
-    <ellipse cx="48" cy="32" rx="3" ry="5" fill="rgba(184,180,168,0.08)"/>
-    <!-- open screaming mouth -->
-    <ellipse cx="35" cy="58" rx="12" ry="10" fill="rgba(2,1,1,0.98)" stroke="rgba(184,180,168,0.12)" stroke-width="0.7"/>
-    <!-- teeth in mouth -->
-    <rect x="26" y="50" width="5" height="7" fill="rgba(200,195,185,0.1)"/>
-    <rect x="33" y="49" width="5" height="9" fill="rgba(200,195,185,0.1)"/>
-    <rect x="40" y="50" width="5" height="7" fill="rgba(200,195,185,0.1)"/>
-  </svg>`,
-  // face 3 — hollow
-  `<svg viewBox="0 0 65 75" xmlns="http://www.w3.org/2000/svg" fill="none">
-    <path d="M32 4 C16 4 4 18 4 34 C4 52 14 68 32 68 C50 68 60 52 60 34 C60 18 48 4 32 4 Z"
-      fill="rgba(9,7,6,0.82)" stroke="rgba(184,180,168,0.08)" stroke-width="0.7"/>
-    <ellipse cx="20" cy="30" rx="8" ry="10" fill="rgba(1,0,0,0.99)" stroke="rgba(184,180,168,0.1)" stroke-width="0.6"/>
-    <ellipse cx="44" cy="30" rx="8" ry="10" fill="rgba(1,0,0,0.99)" stroke="rgba(184,180,168,0.1)" stroke-width="0.6"/>
-    <path d="M22 54 Q32 60 42 54" fill="none" stroke="rgba(184,180,168,0.08)" stroke-width="0.7"/>
-    <line x1="26" y1="54" x2="24" y2="62" stroke="rgba(184,180,168,0.06)" stroke-width="0.5"/>
-    <line x1="32" y1="55" x2="32" y2="63" stroke="rgba(184,180,168,0.06)" stroke-width="0.5"/>
-    <line x1="38" y1="54" x2="40" y2="62" stroke="rgba(184,180,168,0.06)" stroke-width="0.5"/>
-    <!-- forehead scar -->
-    <path d="M28 12 L32 22 L36 12" stroke="rgba(184,180,168,0.06)" stroke-width="0.5" fill="none"/>
-  </svg>`
+  '<svg viewBox="0 0 80 90" xmlns="http://www.w3.org/2000/svg" fill="none">'
+    +'<ellipse cx="40" cy="42" rx="32" ry="38" fill="rgba(8,7,6,0.85)" stroke="rgba(184,180,168,0.1)" stroke-width="0.8"/>'
+    +'<ellipse cx="27" cy="36" rx="10" ry="12" fill="rgba(3,2,1,0.95)" stroke="rgba(184,180,168,0.12)" stroke-width="0.7"/>'
+    +'<ellipse cx="27" cy="36" rx="4" ry="6" fill="rgba(184,180,168,0.12)"/>'
+    +'<ellipse cx="53" cy="36" rx="10" ry="12" fill="rgba(3,2,1,0.95)" stroke="rgba(184,180,168,0.12)" stroke-width="0.7"/>'
+    +'<ellipse cx="53" cy="36" rx="4" ry="6" fill="rgba(184,180,168,0.12)"/>'
+    +'<path d="M28 65 Q40 72 52 65" stroke="rgba(184,180,168,0.1)" stroke-width="0.8" fill="none"/>'
+    +'<path d="M32 65 L35 73 M40 66 L40 75 M48 65 L45 73" stroke="rgba(184,180,168,0.08)" stroke-width="0.5"/>'
+    +'</svg>',
+  '<svg viewBox="0 0 70 80" xmlns="http://www.w3.org/2000/svg" fill="none">'
+    +'<path d="M35 5 C15 5 5 22 5 40 C5 58 15 72 35 72 C55 72 65 58 65 40 C65 22 55 5 35 5 Z" fill="rgba(10,8,7,0.88)" stroke="rgba(184,180,168,0.1)" stroke-width="0.8"/>'
+    +'<ellipse cx="22" cy="32" rx="9" ry="11" fill="rgba(2,1,1,0.98)" stroke="rgba(184,180,168,0.1)" stroke-width="0.7"/>'
+    +'<ellipse cx="22" cy="32" rx="3" ry="5" fill="rgba(184,180,168,0.08)"/>'
+    +'<ellipse cx="48" cy="32" rx="9" ry="11" fill="rgba(2,1,1,0.98)" stroke="rgba(184,180,168,0.1)" stroke-width="0.7"/>'
+    +'<ellipse cx="48" cy="32" rx="3" ry="5" fill="rgba(184,180,168,0.08)"/>'
+    +'<ellipse cx="35" cy="58" rx="12" ry="10" fill="rgba(2,1,1,0.98)" stroke="rgba(184,180,168,0.12)" stroke-width="0.7"/>'
+    +'<rect x="26" y="50" width="5" height="7" fill="rgba(200,195,185,0.1)"/>'
+    +'<rect x="33" y="49" width="5" height="9" fill="rgba(200,195,185,0.1)"/>'
+    +'<rect x="40" y="50" width="5" height="7" fill="rgba(200,195,185,0.1)"/>'
+    +'</svg>',
+  '<svg viewBox="0 0 65 75" xmlns="http://www.w3.org/2000/svg" fill="none">'
+    +'<path d="M32 4 C16 4 4 18 4 34 C4 52 14 68 32 68 C50 68 60 52 60 34 C60 18 48 4 32 4 Z" fill="rgba(9,7,6,0.82)" stroke="rgba(184,180,168,0.08)" stroke-width="0.7"/>'
+    +'<ellipse cx="20" cy="30" rx="8" ry="10" fill="rgba(1,0,0,0.99)" stroke="rgba(184,180,168,0.1)" stroke-width="0.6"/>'
+    +'<ellipse cx="44" cy="30" rx="8" ry="10" fill="rgba(1,0,0,0.99)" stroke="rgba(184,180,168,0.1)" stroke-width="0.6"/>'
+    +'<path d="M22 54 Q32 60 42 54" fill="none" stroke="rgba(184,180,168,0.08)" stroke-width="0.7"/>'
+    +'<line x1="26" y1="54" x2="24" y2="62" stroke="rgba(184,180,168,0.06)" stroke-width="0.5"/>'
+    +'<line x1="32" y1="55" x2="32" y2="63" stroke="rgba(184,180,168,0.06)" stroke-width="0.5"/>'
+    +'<line x1="38" y1="54" x2="40" y2="62" stroke="rgba(184,180,168,0.06)" stroke-width="0.5"/>'
+    +'<path d="M28 12 L32 22 L36 12" stroke="rgba(184,180,168,0.06)" stroke-width="0.5" fill="none"/>'
+    +'</svg>'
 ];
 
 setInterval(()=>{
   const face=document.createElement('div');
   face.className='distorted-face';
   const sz=60+Math.random()*90;
-  face.style.cssText=`
-    left:${Math.random()*88}%;
-    top:${5+Math.random()*80}%;
-    width:${sz}px;height:${sz}px;
-    --fad:${3+Math.random()*4}s;
-    --fadelay:0s;
-    --fao:${0.08+Math.random()*0.14};
-  `;
+  face.style.cssText='left:'+Math.random()*88+'%;top:'+(5+Math.random()*80)+'%;width:'+sz+'px;height:'+sz+'px;--fad:'+(3+Math.random()*4)+'s;--fadelay:0s;--fao:'+(0.08+Math.random()*0.14)+';';
   face.innerHTML=faces[Math.floor(Math.random()*faces.length)];
   document.body.appendChild(face);
   setTimeout(()=>face.remove(),(3+Math.random()*4)*1000+200);
@@ -1287,49 +1134,37 @@ setInterval(()=>{
    JIN FIGURES
 ════════════════════════════════════════ */
 const jinSVGs=[
-  // jin 1 — tall wispy
-  `<svg width="35" height="120" viewBox="0 0 35 120" xmlns="http://www.w3.org/2000/svg" fill="none">
-    <ellipse cx="17" cy="12" rx="11" ry="12" fill="rgba(5,4,3,0.85)"/>
-    <path d="M17 24 Q8 50 6 120 L28 120 Q26 50 17 24 Z" fill="rgba(5,4,3,0.75)"/>
-    <path d="M6 65 Q-2 75 0 95 L8 90 Z" fill="rgba(5,4,3,0.6)"/>
-    <path d="M28 65 Q36 75 34 95 L26 90 Z" fill="rgba(5,4,3,0.6)"/>
-    <ellipse cx="12" cy="11" rx="2" ry="2.5" fill="rgba(184,180,168,0.2)"/>
-    <ellipse cx="22" cy="11" rx="2" ry="2.5" fill="rgba(184,180,168,0.2)"/>
-    <path d="M10 22 Q4 30 2 50 Q-2 35 5 22" fill="rgba(4,3,2,0.5)"/>
-    <path d="M24 22 Q30 30 32 50 Q36 35 29 22" fill="rgba(4,3,2,0.5)"/>
-  </svg>`,
-  // jin 2 — crouching
-  `<svg width="60" height="70" viewBox="0 0 60 70" xmlns="http://www.w3.org/2000/svg" fill="none">
-    <path d="M30 5 C20 5 12 12 12 22 C12 30 18 37 28 40 L28 45 L32 45 L32 40 C42 37 48 30 48 22 C48 12 40 5 30 5 Z"
-      fill="rgba(6,5,4,0.88)"/>
-    <path d="M20 44 Q8 55 5 70 L25 70 Q22 55 28 44 Z" fill="rgba(5,4,3,0.8)"/>
-    <path d="M40 44 Q52 55 55 70 L35 70 Q38 55 32 44 Z" fill="rgba(5,4,3,0.8)"/>
-    <ellipse cx="23" cy="20" rx="5" ry="6" fill="rgba(2,1,1,0.98)"/>
-    <ellipse cx="23" cy="20" rx="2" ry="3" fill="rgba(184,180,168,0.15)"/>
-    <ellipse cx="37" cy="20" rx="5" ry="6" fill="rgba(2,1,1,0.98)"/>
-    <ellipse cx="37" cy="20" rx="2" ry="3" fill="rgba(184,180,168,0.15)"/>
-    <!-- long arms dragging -->
-    <path d="M12 30 Q-5 40 -8 60" stroke="rgba(6,5,4,0.7)" stroke-width="4" stroke-linecap="round" fill="none"/>
-    <path d="M48 30 Q65 40 68 60" stroke="rgba(6,5,4,0.7)" stroke-width="4" stroke-linecap="round" fill="none"/>
-  </svg>`
+  '<svg width="35" height="120" viewBox="0 0 35 120" xmlns="http://www.w3.org/2000/svg" fill="none">'
+    +'<ellipse cx="17" cy="12" rx="11" ry="12" fill="rgba(5,4,3,0.85)"/>'
+    +'<path d="M17 24 Q8 50 6 120 L28 120 Q26 50 17 24 Z" fill="rgba(5,4,3,0.75)"/>'
+    +'<path d="M6 65 Q-2 75 0 95 L8 90 Z" fill="rgba(5,4,3,0.6)"/>'
+    +'<path d="M28 65 Q36 75 34 95 L26 90 Z" fill="rgba(5,4,3,0.6)"/>'
+    +'<ellipse cx="12" cy="11" rx="2" ry="2.5" fill="rgba(184,180,168,0.2)"/>'
+    +'<ellipse cx="22" cy="11" rx="2" ry="2.5" fill="rgba(184,180,168,0.2)"/>'
+    +'<path d="M10 22 Q4 30 2 50 Q-2 35 5 22" fill="rgba(4,3,2,0.5)"/>'
+    +'<path d="M24 22 Q30 30 32 50 Q36 35 29 22" fill="rgba(4,3,2,0.5)"/>'
+    +'</svg>',
+  '<svg width="60" height="70" viewBox="0 0 60 70" xmlns="http://www.w3.org/2000/svg" fill="none">'
+    +'<path d="M30 5 C20 5 12 12 12 22 C12 30 18 37 28 40 L28 45 L32 45 L32 40 C42 37 48 30 48 22 C48 12 40 5 30 5 Z" fill="rgba(6,5,4,0.88)"/>'
+    +'<path d="M20 44 Q8 55 5 70 L25 70 Q22 55 28 44 Z" fill="rgba(5,4,3,0.8)"/>'
+    +'<path d="M40 44 Q52 55 55 70 L35 70 Q38 55 32 44 Z" fill="rgba(5,4,3,0.8)"/>'
+    +'<ellipse cx="23" cy="20" rx="5" ry="6" fill="rgba(2,1,1,0.98)"/>'
+    +'<ellipse cx="23" cy="20" rx="2" ry="3" fill="rgba(184,180,168,0.15)"/>'
+    +'<ellipse cx="37" cy="20" rx="5" ry="6" fill="rgba(2,1,1,0.98)"/>'
+    +'<ellipse cx="37" cy="20" rx="2" ry="3" fill="rgba(184,180,168,0.15)"/>'
+    +'<path d="M12 30 Q-5 40 -8 60" stroke="rgba(6,5,4,0.7)" stroke-width="4" stroke-linecap="round" fill="none"/>'
+    +'<path d="M48 30 Q65 40 68 60" stroke="rgba(6,5,4,0.7)" stroke-width="4" stroke-linecap="round" fill="none"/>'
+    +'</svg>'
 ];
 
 setInterval(()=>{
   const fig=document.createElement('div');
-  fig.style.cssText=`
-    position:fixed;z-index:5;pointer-events:none;
-    bottom:${80+Math.random()*100}px;
-    left:${Math.random()*90}%;
-    opacity:0;
-    filter:blur(${1+Math.random()*2}px);
-    animation:jinappear ${5+Math.random()*8}s ease-in-out forwards;
-  `;
+  fig.style.cssText='position:fixed;z-index:5;pointer-events:none;bottom:'+(80+Math.random()*100)+'px;left:'+Math.random()*90+'%;opacity:0;filter:blur('+(1+Math.random()*2)+'px);animation:jinappear '+(5+Math.random()*8)+'s ease-in-out forwards;';
   fig.innerHTML=jinSVGs[Math.floor(Math.random()*jinSVGs.length)];
   document.body.appendChild(fig);
   setTimeout(()=>fig.remove(),(5+Math.random()*8)*1000+300);
 },6000);
 
-// jin style
 const jinStyle=document.createElement('style');
 jinStyle.textContent='@keyframes jinappear{0%{opacity:0;transform:translateY(30px)}15%{opacity:0.35}50%{opacity:0.25}85%{opacity:0.2}100%{opacity:0;transform:translateY(-20px)}}';
 document.head.appendChild(jinStyle);
@@ -1377,11 +1212,7 @@ document.head.appendChild(shakeS);
 setInterval(()=>{
   if(Math.random()>0.3)return;
   const fl=document.createElement('div');
-  fl.style.cssText=`
-    position:fixed;inset:0;z-index:50;pointer-events:none;
-    background:rgba(200,200,180,0.04);
-    animation:flashit 0.6s ease-out forwards;
-  `;
+  fl.style.cssText='position:fixed;inset:0;z-index:50;pointer-events:none;background:rgba(200,200,180,0.04);animation:flashit 0.6s ease-out forwards;';
   document.body.appendChild(fl);
   setTimeout(()=>fl.remove(),700);
 },12000);
@@ -1399,14 +1230,7 @@ setInterval(()=>{
   const y=Math.random()*window.innerHeight;
   const len=15+Math.random()*55;
   const ang=Math.random()*360;
-  c.style.cssText=`
-    position:fixed;z-index:9;pointer-events:none;
-    left:${x}px;top:${y}px;
-    width:${len}px;height:1px;
-    background:linear-gradient(90deg,transparent,rgba(184,180,168,0.12),transparent);
-    transform:rotate(${ang}deg);transform-origin:0 50%;
-    animation:crackfade 2s ease-out forwards;
-  `;
+  c.style.cssText='position:fixed;z-index:9;pointer-events:none;left:'+x+'px;top:'+y+'px;width:'+len+'px;height:1px;background:linear-gradient(90deg,transparent,rgba(184,180,168,0.12),transparent);transform:rotate('+ang+'deg);transform-origin:0 50%;animation:crackfade 2s ease-out forwards;';
   document.body.appendChild(c);
   setTimeout(()=>c.remove(),2100);
 },3500);
@@ -1424,7 +1248,7 @@ const memTexts=[
   '...أعرفك. عُدتَ.',
   '...كنتُ أنتظرك',
   '...لا مفر من هنا',
-  `...زيارتك رقم ${visits}`,
+  '...زيارتك رقم '+visits,
   '...روحك مسجّلة',
 ];
 const txt=visits===1?'...مرحباً بروح جديدة':memTexts[Math.min(visits-1,memTexts.length-1)];
