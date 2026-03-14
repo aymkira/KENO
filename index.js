@@ -31,7 +31,7 @@ app.get("/", (req, res) => {
 function startBot(message) {
   (message) ? logger(message, "[ Starting ]") : "";
 
-  const child = spawn("node", ["--trace-warnings", "--async-stack-traces", "SOMI.js"], {
+  const child = spawn("node", ["--trace-warnings", "--async-stack-traces", "KIRA.js"], {
     cwd: __dirname,
     stdio: "inherit",
     shell: true
