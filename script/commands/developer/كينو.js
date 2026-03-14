@@ -20,7 +20,7 @@ module.exports.config = {
   cooldowns: 2
 };
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
 const GROQ_MODEL   = "llama-3.3-70b-versatile";
 
 // ══════════════════════════════════════════
