@@ -1,38 +1,20 @@
-
-
 module.exports.config = {
-    name: "antibd",
-    eventType: ["log:user-nickname"],
-    version: "1.0.0",
-    credits: "KIRA",
-    description: "يمنع أي شخص من تغيير كنية البوت بدون إذن"
+  name: "antibd",
+  eventType: ["log:user-nickname"],
+  version: "0.0.1",
+  credits: "MrTomXxX",
+  description: "Against changing Bot's nickname"
 };
 
-const HEADER = "⌬ ━━ 𝗞𝗜𝗥𝗔 𝗣𝗥𝗢𝗧𝗘𝗖𝗧 ━━ ⌬";
-
-module.exports.run = async function ({ api, event, Users, Threads }) {
-    const { logMessageData, threadID, author } = event;
-    const botID = api.getCurrentUserID();
-    const { BOTNAME, ADMINBOT } = global.config;
-
-    // فقط إذا تم تغيير كنية البوت
-    if (logMessageData.participant_id != botID) return;
-    // إذا البوت نفسه أو الأدمن غيّروها — تجاهل
-    if (author == botID || ADMINBOT.includes(author)) return;
-
-    // جلب الكنية المحفوظة للبوت
-    const threadData = await Threads.getData(threadID);
-    const savedNickname = threadData?.nickname || BOTNAME;
-
-    // إذا تغيّرت عن المحفوظة → أعدها
-    if (logMessageData.nickname != savedNickname) {
-        await api.changeNickname(savedNickname, threadID, botID);
-        const userInfo = await Users.getData(author);
-        return api.sendMessage(
-            `${HEADER}\n\n🚫 لا يُسمح بتغيير كنية البوت\n` +
-            `👤 المحاولة من: ${userInfo?.name || author}\n` +
-            `🔄 تم استعادة الكنية الأصلية`,
-            threadID
-        );
-    }
+module.exports.run = async function({ api, event, Users, Threads }) {
+    var { logMessageData, threadID, author } = event;
+    var botID = api.getCurrentUserID();
+    var { BOTNAME, ADMINBOT } = global.config;
+    var { nickname } = await Threads.getData(threadID, botID);
+    var nickname = nickname ? nickname : BOTNAME;
+    if (logMessageData.participant_id == botID && author != botID && !ADMINBOT.includes(author) && logMessageData.nickname != nickname) {
+        api.changeNickname(nickname, threadID, botID);
+        var info = await Users.getData(author);
+        return api.sendMessage(`⌬ ━━ 𝗞𝗜𝗥𝗔 𝗣𝗥𝗢𝗧𝗘𝗖𝗧 ━━ ⌬\n» ${info.name} 🤡 ما تقدر تغير كنيتي يا فاضي`, threadID);
+    }  
 };
