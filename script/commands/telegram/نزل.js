@@ -1,55 +1,30 @@
 // ══════════════════════════════════════════════════════════════
-//   يوت v2 — مصلح مع فيديو+أزرار
+//   نزل v4 — يتعامل مع الفيديو+أزرار في نفس الرسالة
 //   by Ayman
 // ══════════════════════════════════════════════════════════════
 
 const { NewMessage } = require("telegram/events");
 const { Raw }        = require("telegram/events");
-const axios          = require("axios");
 const fs             = require("fs-extra");
 const path           = require("path");
+const axios          = require("axios");
 
 module.exports.config = {
-  name: "يوت",
-  version: "2.0.0",
+  name: "نزل",
+  version: "4.0.0",
   hasPermssion: 0,
   credits: "Ayman",
-  description: "بحث يوتيوب وتنزيل فيديو أو صوت",
+  description: "تنزيل فيديو من كل مواقع التواصل",
   commandCategory: "media",
-  usages: "يوت [اسم الفيديو]",
+  usages: "نزل [رابط]",
   cooldowns: 15
 };
 
-const HEADER  = "⌬ ━━ 𝗞𝗜𝗥𝗔 𝗬𝗢𝗨𝗧𝗨𝗕𝗘 ━━ ⌬";
+global.نزلSessions = global.نزلSessions || {};
+
 const BOT     = "C_5BOT";
 const WAIT_MS = 90000;
 
-global.يوتSessions = global.يوتSessions || {};
-
-// ══ بحث يوتيوب ══
-async function searchYouTube(query) {
-  try {
-    const res = await axios.get(
-      "https://weeb-api.vercel.app/ytsearch?query=" + encodeURIComponent(query),
-      { timeout: 10000 }
-    );
-    if (Array.isArray(res.data) && res.data.length > 0)
-      return res.data.slice(0, 5);
-  } catch(e) {}
-  try {
-    const yt = require("yt-search");
-    const r  = await yt(query);
-    return (r.videos || []).slice(0, 5).map(v => ({
-      title:     v.title,
-      url:       v.url,
-      timestamp: v.timestamp,
-      views:     v.views,
-      author:    v.author?.name || ""
-    }));
-  } catch(e) { return []; }
-}
-
-// ══ انتظار رد البوت ══
 function waitForBotMsg(client, botId, timeout = WAIT_MS) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -96,7 +71,7 @@ function waitForBotMsg(client, botId, timeout = WAIT_MS) {
   });
 }
 
-// ══ استخراج الأزرار ══
+// ── استخراج أزرار الاختيار ──
 function extractButtons(msg) {
   const rows = msg.replyMarkup?.rows || [];
   const btns = [];
@@ -109,10 +84,10 @@ function extractButtons(msg) {
   return btns;
 }
 
-// ══ تنزيل وإرسال ملف ══
+// ── تنزيل ملف من تيليجرام وإرساله ──
 async function downloadAndSend(api, client, msg, threadID, messageID, label) {
   const ext  = msg.audio || msg.document?.mimeType?.includes("audio") ? ".mp3" : ".mp4";
-  const file = path.join(process.cwd(), "tmp", "yt_" + Date.now() + ext);
+  const file = path.join(process.cwd(), "tmp", "dl_" + Date.now() + ext);
   await fs.ensureDir(path.dirname(file));
   await client.downloadMedia(msg, { outputFile: file });
   const sizeMB = ((await fs.stat(file)).size / 1024 / 1024).toFixed(2);
@@ -122,49 +97,65 @@ async function downloadAndSend(api, client, msg, threadID, messageID, label) {
   );
 }
 
-// ══ معالجة رد البوت ══
-async function processBotMsg(api, client, botId, msg, threadID, messageID, senderID, title) {
+// ── معالجة رسالة البوت (فيها فيديو + أزرار) ──
+async function processMsg(api, client, botId, msg, threadID, messageID, senderID) {
   await fs.ensureDir(path.join(process.cwd(), "tmp"));
 
   const hasVideo   = msg.video || msg.document?.mimeType?.includes("video") ||
     (msg.document?.attributes || []).some(a => a.className === "DocumentAttributeVideo");
-  const buttons    = extractButtons(msg);
-  const hasButtons = buttons.length > 0;
+  const hasButtons = extractButtons(msg).length > 0;
 
-  // ── فيديو + أزرار أو أزرار فقط → أعرض قائمة للمستخدم ──
-  if (hasButtons) {
-    let listText = HEADER + "\n\n⬇️ اختر نوع التنزيل:\n\n";
+  // ── الحالة: فيديو + أزرار في نفس الرسالة ──
+  if (hasVideo && hasButtons) {
+    const buttons = extractButtons(msg);
+    let listText = "⬇️ اختر نوع التنزيل:\n\n";
     buttons.forEach((b, i) => { listText += (i + 1) + ". " + b + "\n"; });
     listText += "\n↩️ رد برقم اختيارك";
 
     api.sendMessage(listText, threadID, (err, info) => {
       if (err || !info) return;
-      // حفظ الرسالة الأصلية مع الأزرار
-      global.يوتSessions[info.messageID] = {
-        msg, buttons, client, botId,
-        hasVideo, title
-      };
+      global.نزلSessions[info.messageID] = { msg, buttons, client, botId };
       global.client.handleReply.push({
         messageID: info.messageID,
         threadID,
-        name: "يوت",
+        name: "نزل",
         author: senderID
       });
     }, messageID);
     return;
   }
 
-  // ── فيديو مباشر ──
+  // ── الحالة: أزرار فقط بدون فيديو ──
+  if (!hasVideo && hasButtons) {
+    const buttons = extractButtons(msg);
+    let listText = "⬇️ اختر نوع التنزيل:\n\n";
+    buttons.forEach((b, i) => { listText += (i + 1) + ". " + b + "\n"; });
+    listText += "\n↩️ رد برقم اختيارك";
+
+    api.sendMessage(listText, threadID, (err, info) => {
+      if (err || !info) return;
+      global.نزلSessions[info.messageID] = { msg, buttons, client, botId };
+      global.client.handleReply.push({
+        messageID: info.messageID,
+        threadID,
+        name: "نزل",
+        author: senderID
+      });
+    }, messageID);
+    return;
+  }
+
+  // ── الحالة: فيديو مباشر ──
   if (hasVideo) {
-    await downloadAndSend(api, client, msg, threadID, messageID, title || "✅");
+    await downloadAndSend(api, client, msg, threadID, messageID, "✅");
     if (api.setMessageReaction) api.setMessageReaction("✅", messageID, () => {}, true);
     return;
   }
 
-  // ── رابط في النص ──
+  // ── الحالة: رابط في النص ──
   const linkMatch = msg.message?.match(/https?:\/\/[^\s]+/);
   if (linkMatch) {
-    const file = path.join(process.cwd(), "tmp", "yt_" + Date.now() + ".mp4");
+    const file = path.join(process.cwd(), "tmp", "dl_" + Date.now() + ".mp4");
     const res  = await axios.get(linkMatch[0], {
       responseType: "stream", timeout: 90000,
       maxContentLength: 50 * 1024 * 1024,
@@ -176,7 +167,7 @@ async function processBotMsg(api, client, botId, msg, threadID, messageID, sende
     });
     const sizeMB = ((await fs.stat(file)).size / 1024 / 1024).toFixed(2);
     await api.sendMessage(
-      { body: (title || "✅") + " | " + sizeMB + " MB", attachment: fs.createReadStream(file) },
+      { body: "✅ " + sizeMB + " MB", attachment: fs.createReadStream(file) },
       threadID, () => { fs.remove(file).catch(() => {}); }, messageID
     );
     if (api.setMessageReaction) api.setMessageReaction("✅", messageID, () => {}, true);
@@ -190,109 +181,63 @@ async function processBotMsg(api, client, botId, msg, threadID, messageID, sende
 module.exports.run = async function({ api, event, args }) {
   const { threadID, messageID, senderID } = event;
 
-  const query = args.join(" ").trim();
-  if (!query) {
+  const url = args.join(" ").trim() ||
+    event.messageReply?.body?.match(/https?:\/\/[^\s]+/)?.[0];
+
+  if (!url || !url.startsWith("http")) {
     return api.sendMessage(
-      HEADER + "\n\n🔍 اكتب اسم الفيديو\n\nمثال:\nيوت moonlight xxxtentacion",
+      "⬇️ تنزيل فيديو من كل المواقع\n\n" +
+      "الاستخدام:\n" +
+      "نزل [رابط]\n\n" +
+      "🎬 YouTube | 🎵 TikTok\n" +
+      "📸 Instagram | 👥 Facebook\n" +
+      "🐦 Twitter/X وغيرها",
       threadID, messageID
     );
   }
 
-  if (api.setMessageReaction) api.setMessageReaction("🔎", messageID, () => {}, true);
+  if (typeof global.getTgClient !== "function") {
+    return api.sendMessage(
+      "❌ سجّل دخول تيليجرام أولاً:\n.tglogin +964XXXXXXXXXX",
+      threadID, messageID
+    );
+  }
+
+  if (api.setMessageReaction) api.setMessageReaction("⏳", messageID, () => {}, true);
 
   try {
-    const results = await searchYouTube(query);
-    if (!results || results.length === 0) {
-      if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
-      return api.sendMessage(HEADER + "\n\n❌ لم يتم العثور على نتائج", threadID, messageID);
-    }
+    const client    = await global.getTgClient();
+    const botEntity = await client.getEntity(BOT);
+    const botId     = botEntity.id.toString();
 
-    let listText = HEADER + "\n\n🔍 نتائج: \"" + query + "\"\n\n";
-    results.forEach((v, i) => {
-      listText += (i + 1) + ". " + v.title + "\n";
-      if (v.timestamp) listText += "   ⏱️ " + v.timestamp;
-      if (v.views)     listText += " | 👁️ " + (typeof v.views === "number" ? v.views.toLocaleString() : v.views);
-      if (v.author)    listText += " | 🎤 " + v.author;
-      listText += "\n\n";
-    });
-    listText += "↩️ رد برقم الفيديو";
+    await client.sendMessage(BOT, { message: url });
+    const resultMsg = await waitForBotMsg(client, botId, WAIT_MS);
 
-    if (api.setMessageReaction) api.setMessageReaction("✅", messageID, () => {}, true);
-
-    api.sendMessage(listText, threadID, (err, info) => {
-      if (err || !info) return;
-      global.يوتSessions[info.messageID] = { results, senderID, step: "search" };
-      global.client.handleReply.push({
-        messageID: info.messageID,
-        threadID,
-        name: "يوت",
-        author: senderID
-      });
-    }, messageID);
+    await processMsg(api, client, botId, resultMsg, threadID, messageID, senderID);
 
   } catch(e) {
     if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
-    api.sendMessage(HEADER + "\n\n❌ فشل البحث\n" + e.message, threadID, messageID);
+    console.error("❌ نزل:", e.message);
+    api.sendMessage("❌ فشل التنزيل\n\n" + e.message, threadID, messageID);
   }
 };
 
 // ══ HANDLE REPLY ══
 module.exports.handleReply = async function({ api, event, handleReply }) {
-  const { threadID, messageID, senderID } = event;
+  const { threadID, messageID } = event;
   const sentMsgID = handleReply.messageID;
 
-  const session = global.يوتSessions[sentMsgID];
-  if (!session) return api.sendMessage("❌ انتهت الجلسة، ابحث مجدداً", threadID, messageID);
+  const session = global.نزلSessions[sentMsgID];
+  if (!session) return api.sendMessage("❌ انتهت الجلسة، حاول مجدداً", threadID, messageID);
 
-  // ── المرحلة 1: اختيار الفيديو من نتائج البحث ──
-  if (session.step === "search") {
-    const { results } = session;
-    const choiceNum = parseInt(event.body?.trim());
-
-    if (!choiceNum || choiceNum < 1 || choiceNum > results.length) {
-      return api.sendMessage("❌ اختر رقماً بين 1 و " + results.length, threadID, messageID);
-    }
-
-    delete global.يوتSessions[sentMsgID];
-    global.client.handleReply = global.client.handleReply.filter(h => h.messageID !== sentMsgID);
-
-    const selected = results[choiceNum - 1];
-    if (api.setMessageReaction) api.setMessageReaction("⏳", messageID, () => {}, true);
-    api.sendMessage(HEADER + "\n\n⬇️ جاري جلب:\n" + selected.title + "\n⏳ انتظر...", threadID, messageID);
-
-    try {
-      if (typeof global.getTgClient !== "function") throw new Error("SESSION_REQUIRED");
-
-      const client    = await global.getTgClient();
-      const botEntity = await client.getEntity(BOT);
-      const botId     = botEntity.id.toString();
-
-      await client.sendMessage(BOT, { message: selected.url });
-      const resultMsg = await waitForBotMsg(client, botId, WAIT_MS);
-
-      await processBotMsg(api, client, botId, resultMsg, threadID, messageID, senderID, selected.title);
-
-    } catch(e) {
-      if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
-      api.sendMessage(
-        e.message.includes("SESSION_REQUIRED")
-          ? "❌ سجّل دخول تيليجرام أولاً:\n.tglogin +964XXXXXXXXXX"
-          : HEADER + "\n\n❌ فشل التنزيل\n" + e.message,
-        threadID, messageID
-      );
-    }
-    return;
-  }
-
-  // ── المرحلة 2: اختيار نوع التنزيل (فيديو/صوت) ──
-  const { msg, buttons, client, botId, hasVideo, title } = session;
+  const { msg, buttons, client, botId } = session;
   const choiceNum = parseInt(event.body?.trim());
 
   if (!choiceNum || choiceNum < 1 || choiceNum > buttons.length) {
     return api.sendMessage("❌ اختر رقماً بين 1 و " + buttons.length, threadID, messageID);
   }
 
-  delete global.يوتSessions[sentMsgID];
+  delete global.نزلSessions[sentMsgID];
   global.client.handleReply = global.client.handleReply.filter(h => h.messageID !== sentMsgID);
 
   if (api.setMessageReaction) api.setMessageReaction("⏳", messageID, () => {}, true);
@@ -302,25 +247,29 @@ module.exports.handleReply = async function({ api, event, handleReply }) {
   try {
     await fs.ensureDir(path.join(process.cwd(), "tmp"));
 
-    // إذا الفيديو موجود في الرسالة الأصلية وهو أول خيار
-    if (hasVideo && (selectedBtn.includes("فيديو") || selectedBtn.includes("video") || selectedBtn.includes("مقطع"))) {
+    // ── إذا اختار من رسالة فيها فيديو+أزرار — ينزل الفيديو الموجود ──
+    const hasVideo = msg.video || msg.document?.mimeType?.includes("video") ||
+      (msg.document?.attributes || []).some(a => a.className === "DocumentAttributeVideo");
+
+    if (hasVideo && choiceNum === 1) {
+      // أول خيار = الفيديو الموجود أصلاً
       await downloadAndSend(api, client, msg, threadID, messageID, selectedBtn);
     } else {
       // ضغط الزر وانتظار الرد
       await msg.click({ text: selectedBtn });
       const fileMsg = await waitForBotMsg(client, botId, 60000);
 
-      const hasMedia = fileMsg.video || fileMsg.audio ||
+      const hasMedia2 = fileMsg.video || fileMsg.audio ||
         fileMsg.document?.mimeType?.includes("video") ||
         fileMsg.document?.mimeType?.includes("audio");
 
-      if (hasMedia) {
+      if (hasMedia2) {
         await downloadAndSend(api, client, fileMsg, threadID, messageID, selectedBtn);
       } else {
         const linkMatch = fileMsg.message?.match(/https?:\/\/[^\s]+/);
         if (!linkMatch) throw new Error("البوت لم يرسل الملف");
         const ext  = selectedBtn.includes("صوت") ? ".mp3" : ".mp4";
-        const file = path.join(process.cwd(), "tmp", "yt_" + Date.now() + ext);
+        const file = path.join(process.cwd(), "tmp", "dl_" + Date.now() + ext);
         const res  = await axios.get(linkMatch[0], {
           responseType: "stream", timeout: 90000,
           maxContentLength: 50 * 1024 * 1024,
@@ -342,7 +291,7 @@ module.exports.handleReply = async function({ api, event, handleReply }) {
 
   } catch(e) {
     if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
-    console.error("❌ يوت handleReply:", e.message);
-    api.sendMessage(HEADER + "\n\n❌ فشل التنزيل\n" + e.message, threadID, messageID);
+    console.error("❌ نزل handleReply:", e.message);
+    api.sendMessage("❌ فشل التنزيل\n\n" + e.message, threadID, messageID);
   }
 };
