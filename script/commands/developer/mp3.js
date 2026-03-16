@@ -1,157 +1,108 @@
 // ══════════════════════════════════════════════════════════════
-//   MP3 — تحويل الفيديو لصوت عبر @abode20000_bot
-//   by Ayman
+//   MP3 — تحويل فيديو يوتيوب لصوت عبر @abode20000_bot
+//   by Ayman v3 — session من MongoDB
 // ══════════════════════════════════════════════════════════════
 
-const { TelegramClient } = require("telegram");
-const { StringSession }  = require("telegram/sessions");
-const { NewMessage }     = require("telegram/events");
-const { Logger }         = require("telegram/extensions");
-const fs                 = require("fs-extra");
-const path               = require("path");
-const axios              = require("axios");
-
-Logger.setLevel("none");
+const { NewMessage } = require("telegram/events");
+const { execSync }   = require("child_process");
+const fs             = require("fs-extra");
+const path           = require("path");
+const axios          = require("axios");
 
 module.exports.config = {
   name: "mp3",
-  version: "1.0.0",
+  version: "3.0.0",
   hasPermssion: 0,
   credits: "Ayman",
-  description: "تحويل فيديو يوتيوب أو فيديو مرفق إلى mp3 عبر تيليجرام",
+  description: "تحويل فيديو يوتيوب أو مرفق إلى mp3",
   commandCategory: "media",
   usages: "mp3 [رابط يوتيوب] أو أرفق فيديو",
   cooldowns: 30
 };
 
-// ══════════════════════════════════════════
-//   إعدادات تيليجرام — غيّر هنا فقط
-// ══════════════════════════════════════════
-const TG_CONFIG = {
-  apiId:    38886989,
-  apiHash:  "d29c090337bce1e1015c766493edab71",
-  // بعد أول تشغيل يُحفظ الـ session تلقائياً في session.txt
-  // لا تحتاج رقم الهاتف مرة ثانية
-  sessionPath: path.join(process.cwd(), "includes", "tg_session.txt"),
-  botUsername: "abode20000_bot",
-  timeoutMs: 120000  // انتظر 2 دقيقة لرد البوت
-};
+const BOT_USERNAME = "abode20000_bot";
+const TIMEOUT_MS   = 120000;
 
-// ══════════════════════════════════════════
-//   تحميل أو إنشاء الـ session
-// ══════════════════════════════════════════
-async function getSession() {
-  try {
-    if (await fs.pathExists(TG_CONFIG.sessionPath)) {
-      const saved = await fs.readFile(TG_CONFIG.sessionPath, "utf8");
-      return saved.trim();
-    }
-  } catch(e) {}
-  return "";
+// ── تنزيل يوتيوب عبر yt-dlp ──
+async function downloadYoutube(url, outputPath) {
+  try { execSync("yt-dlp --version", { stdio: "ignore" }); }
+  catch(e) {
+    try { execSync("pip3 install yt-dlp", { stdio: "pipe" }); }
+    catch(e2) { throw new Error("yt-dlp غير مثبت. شغّل: pip3 install yt-dlp"); }
+  }
+  execSync(
+    "yt-dlp -f \"best[ext=mp4][filesize<50M]/best\" " +
+    "--merge-output-format mp4 --no-playlist " +
+    "-o \"" + outputPath + "\" \"" + url + "\"",
+    { timeout: 120000 }
+  );
+  if (!await fs.pathExists(outputPath))
+    throw new Error("فشل تنزيل الفيديو من يوتيوب");
 }
 
-async function saveSession(sessionStr) {
-  await fs.ensureDir(path.dirname(TG_CONFIG.sessionPath));
-  await fs.writeFile(TG_CONFIG.sessionPath, sessionStr, "utf8");
-}
-
-// ══════════════════════════════════════════
-//   الكلاينت الرئيسي (singleton)
-// ══════════════════════════════════════════
-let tgClient = null;
-
-async function getTgClient() {
-  if (tgClient && tgClient.connected) return tgClient;
-
-  const sessionStr = await getSession();
-  const session    = new StringSession(sessionStr);
-
-  tgClient = new TelegramClient(session, TG_CONFIG.apiId, TG_CONFIG.apiHash, {
-    connectionRetries: 3,
-     // أخفي logs تيليجرام
-  });
-
-  await tgClient.start({
-    phoneNumber:  async () => { throw new Error("SESSION_REQUIRED"); },
-    phoneCode:    async () => { throw new Error("SESSION_REQUIRED"); },
-    password:     async () => { throw new Error("SESSION_REQUIRED"); },
-    onError:      (err) => console.error("TG Error:", err)
-  });
-
-  // حفظ الـ session الجديدة
-  await saveSession(tgClient.session.save());
-  return tgClient;
-}
-
-// ══════════════════════════════════════════
-//   إرسال لبوت تيليجرام والانتظار للرد
-// ══════════════════════════════════════════
+// ── إرسال لبوت تيليجرام والانتظار ──
 async function sendAndWait(client, filePath) {
   return new Promise(async (resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(new Error("انتهت مهلة الانتظار — بوت التيليجرام لم يرد"));
-    }, TG_CONFIG.timeoutMs);
+    const timer = setTimeout(() => {
+      client.removeEventHandler(handler, new NewMessage({}));
+      reject(new Error("انتهت مهلة الانتظار — البوت لم يرد خلال دقيقتين"));
+    }, TIMEOUT_MS);
 
-    // مستمع للرد من البوت
-    const handler = async (event) => {
-      const msg = event.message;
-      // تحقق أن الرد من البوت المطلوب وفيه ملف صوتي
-      if (
-        msg.peerId?.userId?.toString() === (await client.getEntity(TG_CONFIG.botUsername)).id.toString() &&
-        (msg.audio || msg.document?.mimeType?.includes("audio") || msg.voice)
-      ) {
-        clearTimeout(timeout);
-        client.removeEventHandler(handler, new NewMessage({}));
+    let botId;
+    try {
+      botId = (await client.getEntity(BOT_USERNAME)).id.toString();
+    } catch(e) {
+      clearTimeout(timer);
+      return reject(new Error("لم يتم العثور على البوت: " + BOT_USERNAME));
+    }
 
-        try {
-          // تنزيل الملف الصوتي
-          const tmpAudio = path.join(process.cwd(), "tmp", `audio_${Date.now()}.mp3`);
-          await fs.ensureDir(path.dirname(tmpAudio));
-          await client.downloadMedia(msg, { outputFile: tmpAudio });
-          resolve(tmpAudio);
-        } catch(e) {
-          reject(new Error("فشل تنزيل الملف الصوتي: " + e.message));
-        }
+    const handler = async (ev) => {
+      const msg = ev.message;
+      if (msg.peerId?.userId?.toString() !== botId) return;
+      const hasAudio = msg.audio || msg.voice ||
+        (msg.document?.mimeType || "").includes("audio");
+      if (!hasAudio) return;
+
+      clearTimeout(timer);
+      client.removeEventHandler(handler, new NewMessage({}));
+
+      try {
+        const tmpAudio = path.join(process.cwd(), "tmp", "audio_" + Date.now() + ".mp3");
+        await fs.ensureDir(path.dirname(tmpAudio));
+        await client.downloadMedia(msg, { outputFile: tmpAudio });
+        resolve(tmpAudio);
+      } catch(e) {
+        reject(new Error("فشل تنزيل الصوت: " + e.message));
       }
     };
 
-    client.addEventHandler(handler, new NewMessage({ fromUsers: [TG_CONFIG.botUsername] }));
+    client.addEventHandler(handler, new NewMessage({ fromUsers: [BOT_USERNAME] }));
 
-    // إرسال الفيديو للبوت
     try {
-      await client.sendFile(TG_CONFIG.botUsername, {
-        file: filePath,
-        caption: "",
-        forceDocument: false
-      });
+      await client.sendFile(BOT_USERNAME, { file: filePath, caption: "", forceDocument: false });
     } catch(e) {
-      clearTimeout(timeout);
+      clearTimeout(timer);
       client.removeEventHandler(handler, new NewMessage({}));
-      reject(new Error("فشل إرسال الفيديو لتيليجرام: " + e.message));
+      reject(new Error("فشل إرسال الفيديو: " + e.message));
     }
   });
 }
 
-// ══════════════════════════════════════════
-//   RUN
-// ══════════════════════════════════════════
 module.exports.run = async function({ api, event, args }) {
-  const { threadID, messageID, senderID } = event;
+  const { threadID, messageID } = event;
 
-  // ── التحقق من المدخل ──
-  const hasAttachment = event.attachments?.some(a => a.type === "video");
-  const url           = args[0]?.match(/https?:\/\/[^\s]+/)?.[0] ||
-                        event.messageReply?.body?.match(/https?:\/\/[^\s]+/)?.[0];
-  const isYoutube     = url && /youtube\.com|youtu\.be/i.test(url);
+  const hasVideo  = event.attachments?.some(a => a.type === "video");
+  const url       = args[0]?.match(/https?:\/\/[^\s]+/)?.[0] ||
+                    event.messageReply?.body?.match(/https?:\/\/[^\s]+/)?.[0];
+  const isYoutube = url && /youtube\.com\/watch|youtu\.be\//i.test(url);
 
-  if (!hasAttachment && !isYoutube) {
+  if (!hasVideo && !isYoutube) {
     return api.sendMessage(
-      "🎵 أمر تحويل الفيديو لـ MP3\n\n" +
+      "🎵 تحويل فيديو لـ MP3\n\n" +
       "الاستخدام:\n" +
-      "• أرسل فيديو مرفق + اكتب: mp3\n" +
-      "• أو: mp3 [رابط يوتيوب]\n\n" +
-      "مثال:\n" +
-      "mp3 https://youtube.com/watch?v=...",
+      "• mp3 https://youtube.com/watch?v=...\n" +
+      "• أو أرفق فيديو واكتب: mp3\n\n" +
+      "⚠️ روابط Playlist غير مدعومة",
       threadID, messageID
     );
   }
@@ -163,56 +114,36 @@ module.exports.run = async function({ api, event, args }) {
   let audioPath = null;
 
   try {
-    // ── تحضير ملف الفيديو ──
+    // تحقق من وجود getTgClient (يُعرَّف في tglogin.js)
+    if (typeof global.getTgClient !== "function")
+      throw new Error("SESSION_REQUIRED");
+
     await fs.ensureDir(path.join(process.cwd(), "tmp"));
 
-    if (hasAttachment) {
-      // تنزيل الفيديو المرفق من المسنجر
-      const attachment = event.attachments.find(a => a.type === "video");
-      videoPath = path.join(process.cwd(), "tmp", `vid_${Date.now()}.mp4`);
-
-      const res = await axios.get(attachment.url, {
-        responseType: "stream",
-        timeout: 60000,
+    if (hasVideo) {
+      const att = event.attachments.find(a => a.type === "video");
+      videoPath = path.join(process.cwd(), "tmp", "vid_" + Date.now() + ".mp4");
+      const res = await axios.get(att.url, {
+        responseType: "stream", timeout: 60000,
         maxContentLength: 50 * 1024 * 1024
       });
-
-      await new Promise((resolve, reject) => {
-        const writer = fs.createWriteStream(videoPath);
-        res.data.pipe(writer);
-        writer.on("finish", resolve);
-        writer.on("error", reject);
+      await new Promise((res2, rej) => {
+        const w = fs.createWriteStream(videoPath);
+        res.data.pipe(w);
+        w.on("finish", res2);
+        w.on("error", rej);
       });
-
-    } else if (isYoutube) {
-      // تنزيل من يوتيوب
-      const ytdl = require("ytdl-core");
-      videoPath  = path.join(process.cwd(), "tmp", `yt_${Date.now()}.mp4`);
-
-      const info    = await ytdl.getInfo(url);
-      const format  = ytdl.chooseFormat(info.formats, { quality: "lowestvideo" });
-
-      await new Promise((resolve, reject) => {
-        ytdl(url, { format })
-          .pipe(fs.createWriteStream(videoPath))
-          .on("finish", resolve)
-          .on("error", reject);
-      });
+    } else {
+      videoPath = path.join(process.cwd(), "tmp", "yt_" + Date.now() + ".mp4");
+      await downloadYoutube(url, videoPath);
     }
 
-    // ── الاتصال بتيليجرام وإرسال الفيديو ──
-    const client = await getTgClient();
+    const client = await global.getTgClient();
     audioPath    = await sendAndWait(client, videoPath);
 
-    // ── إرسال الصوت للمستخدم في المسنجر ──
-    const stat   = await fs.stat(audioPath);
-    const sizeMB = (stat.size / 1024 / 1024).toFixed(2);
-
+    const sizeMB = ((await fs.stat(audioPath)).size / 1024 / 1024).toFixed(2);
     await api.sendMessage(
-      {
-        body: `🎵 تم التحويل بنجاح!\n📦 الحجم: ${sizeMB} MB`,
-        attachment: fs.createReadStream(audioPath)
-      },
+      { body: "🎵 تم التحويل!\n📦 " + sizeMB + " MB", attachment: fs.createReadStream(audioPath) },
       threadID,
       () => {
         fs.remove(audioPath).catch(() => {});
@@ -227,15 +158,11 @@ module.exports.run = async function({ api, event, args }) {
     if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
     if (videoPath) fs.remove(videoPath).catch(() => {});
     if (audioPath) fs.remove(audioPath).catch(() => {});
-
-    console.error("❌ MP3 Error:", e.message);
-
-    // رسالة خطأ واضحة
-    let errMsg = `❌ فشل التحويل\n\n${e.message}`;
-    if (e.message.includes("SESSION_REQUIRED")) {
-      errMsg = "❌ لم يتم تسجيل الدخول لتيليجرام بعد\n\n💡 شغّل أمر: tglogin\nلتسجيل حسابك الثاني";
-    }
-
-    api.sendMessage(errMsg, threadID, messageID);
+    api.sendMessage(
+      e.message.includes("SESSION_REQUIRED")
+        ? "❌ سجّل دخول تيليجرام أولاً:\n.tglogin +964XXXXXXXXXX"
+        : "❌ فشل التحويل\n\n" + e.message,
+      threadID, messageID
+    );
   }
 };
