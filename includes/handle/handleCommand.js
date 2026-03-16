@@ -22,7 +22,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         const { userBanned, threadBanned, threadInfo, threadData, commandBanned } = global.data;
         const { commands, cooldowns } = global.client;
 
-        var { body, senderID, threadID, messageID } = event;
+        var { body, senderID, threadID, messageID, mentions } = event;
         if (!body) return;
 
         senderID = String(senderID);
@@ -33,7 +33,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         const prefix = threadSetting.hasOwnProperty("PREFIX") ? threadSetting.PREFIX : PREFIX;
         const botID = api.getCurrentUserID();
 
-        // ✅ إصلاح KENO: prefixRegex يعتمد botID لا senderID
+        // ✅ الإصلاح: التحقق من البادئة أو منشن البوت فقط (وليس أي منشن)
         const prefixRegex = new RegExp(`^(<@!?${botID}>|${escapeRegex(prefix)})\\s*`);
         const [matchedPrefix] = body.match(prefixRegex) || [null];
         if (!matchedPrefix) return;
