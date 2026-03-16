@@ -1,197 +1,266 @@
-// ══════════════════════════════════════════════════════════════
-//   LOGO — تصميم لوغو عبر @X2Z2BOT
-//   by Ayman
-// ══════════════════════════════════════════════════════════════
-
-const { NewMessage }  = require("telegram/events");
-const { Button }      = require("telegram/tl/types");
-const fs              = require("fs-extra");
-const path            = require("path");
+// لوكو — تصميم لوغو عبر @logokirabot
+const { NewMessage } = require("telegram/events");
+const { Raw }        = require("telegram/events");
+const fs             = require("fs-extra");
+const path           = require("path");
 
 module.exports.config = {
-  name: "logo",
+  name: "لوكو",
   version: "1.0.0",
   hasPermssion: 0,
   credits: "Ayman",
   description: "تصميم لوغو احترافي",
   commandCategory: "design",
-  usages: "logo [اسم الشركة] | [اسم الشعار] أو logo [اسم الشركة]",
+  usages: "لوكو [اسم الشركة] / [الشعار]",
   cooldowns: 30
 };
 
-const BOT     = "X2Z2BOT";
+const BOT     = "logokirabot";
 const WAIT_MS = 60000;
 
-// ── انتظر رسالة من البوت ──
-function waitForMessage(client, botId, timeout = WAIT_MS) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      client.removeEventHandler(handler, new NewMessage({}));
-      reject(new Error("timeout"));
+// انتظار رسالة فيها أزرار
+function waitForButtons(client, botId, timeout) {
+  timeout = timeout || WAIT_MS;
+  return new Promise(function(resolve, reject) {
+    var timer = setTimeout(function() {
+      try { client.removeEventHandler(onNew, new NewMessage({})); } catch(e) {}
+      try { client.removeEventHandler(onRaw, new Raw({})); } catch(e) {}
+      reject(new Error("البوت لم يرد"));
     }, timeout);
-
-    const handler = async (ev) => {
-      const msg = ev.message;
-      if (msg.peerId?.userId?.toString() !== botId) return;
+    var resolved = false;
+    function finish(msg) {
+      if (resolved) return;
+      if (!msg.replyMarkup || !msg.replyMarkup.rows || msg.replyMarkup.rows.length === 0) return;
+      resolved = true;
       clearTimeout(timer);
-      client.removeEventHandler(handler, new NewMessage({}));
+      try { client.removeEventHandler(onNew, new NewMessage({})); } catch(e) {}
+      try { client.removeEventHandler(onRaw, new Raw({})); } catch(e) {}
       resolve(msg);
-    };
-
-    client.addEventHandler(handler, new NewMessage({ fromUsers: [BOT] }));
+    }
+    async function onNew(ev) {
+      var msg = ev.message;
+      if (!msg || !msg.peerId || msg.peerId.userId == null) return;
+      if (msg.peerId.userId.toString() !== botId) return;
+      finish(msg);
+    }
+    async function onRaw(update) {
+      try {
+        if ((update.className || "").indexOf("Edit") === -1) return;
+        var msg = update.message;
+        if (!msg) return;
+        var sid = (msg.peerId && msg.peerId.userId) ? msg.peerId.userId.toString() :
+                  (msg.fromId && msg.fromId.userId) ? msg.fromId.userId.toString() : "";
+        if (sid !== botId) return;
+        finish(msg);
+      } catch(e) {}
+    }
+    client.addEventHandler(onNew, new NewMessage({ fromUsers: [BOT] }));
+    client.addEventHandler(onRaw, new Raw({}));
   });
 }
 
-// ── انتظر صورة من البوت ──
-function waitForPhoto(client, botId, timeout = 90000) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      client.removeEventHandler(handler, new NewMessage({}));
+// انتظار أي رسالة من البوت (نص أو صورة)
+function waitForMsg(client, botId, timeout) {
+  timeout = timeout || WAIT_MS;
+  return new Promise(function(resolve, reject) {
+    var timer = setTimeout(function() {
+      try { client.removeEventHandler(onNew, new NewMessage({})); } catch(e) {}
+      reject(new Error("البوت لم يرد"));
+    }, timeout);
+    var resolved = false;
+    function finish(msg) {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timer);
+      try { client.removeEventHandler(onNew, new NewMessage({})); } catch(e) {}
+      resolve(msg);
+    }
+    async function onNew(ev) {
+      var msg = ev.message;
+      if (!msg || !msg.peerId || msg.peerId.userId == null) return;
+      if (msg.peerId.userId.toString() !== botId) return;
+      finish(msg);
+    }
+    client.addEventHandler(onNew, new NewMessage({ fromUsers: [BOT] }));
+  });
+}
+
+// انتظار صورة
+function waitForPhoto(client, botId, timeout) {
+  timeout = timeout || 90000;
+  return new Promise(function(resolve, reject) {
+    var timer = setTimeout(function() {
+      try { client.removeEventHandler(onNew, new NewMessage({})); } catch(e) {}
+      try { client.removeEventHandler(onRaw, new Raw({})); } catch(e) {}
       reject(new Error("البوت لم يرسل الصورة"));
     }, timeout);
-
-    const handler = async (ev) => {
-      const msg = ev.message;
-      if (msg.peerId?.userId?.toString() !== botId) return;
-      if (!msg.photo && !msg.document?.mimeType?.includes("image")) return;
+    var resolved = false;
+    function finish(msg) {
+      if (resolved) return;
+      var hasPhoto = msg.photo || (msg.document && (msg.document.mimeType || "").indexOf("image") !== -1);
+      if (!hasPhoto) return;
+      resolved = true;
       clearTimeout(timer);
-      client.removeEventHandler(handler, new NewMessage({}));
+      try { client.removeEventHandler(onNew, new NewMessage({})); } catch(e) {}
+      try { client.removeEventHandler(onRaw, new Raw({})); } catch(e) {}
       resolve(msg);
-    };
-
-    client.addEventHandler(handler, new NewMessage({ fromUsers: [BOT] }));
+    }
+    async function onNew(ev) {
+      var msg = ev.message;
+      if (!msg || !msg.peerId || msg.peerId.userId == null) return;
+      if (msg.peerId.userId.toString() !== botId) return;
+      finish(msg);
+    }
+    async function onRaw(update) {
+      try {
+        if ((update.className || "").indexOf("Edit") === -1) return;
+        var msg = update.message;
+        if (!msg) return;
+        var sid = (msg.peerId && msg.peerId.userId) ? msg.peerId.userId.toString() :
+                  (msg.fromId && msg.fromId.userId) ? msg.fromId.userId.toString() : "";
+        if (sid !== botId) return;
+        finish(msg);
+      } catch(e) {}
+    }
+    client.addEventHandler(onNew, new NewMessage({ fromUsers: [BOT] }));
+    client.addEventHandler(onRaw, new Raw({}));
   });
-}
-
-// ── ضغط زر في رسالة البوت ──
-async function clickButton(client, msg, buttonText) {
-  try {
-    const buttons = msg.replyMarkup?.rows || [];
-    for (const row of buttons) {
-      for (const btn of (row.buttons || [])) {
-        const label = btn.text || "";
-        if (label.includes(buttonText) || buttonText.includes(label.substring(0, 5))) {
-          await msg.click({ text: label });
-          return true;
-        }
-      }
-    }
-    // إذا ما لقينا الزر المحدد، اضغط أول زر
-    const firstBtn = buttons[0]?.buttons?.[0];
-    if (firstBtn) {
-      await msg.click({ text: firstBtn.text });
-      return true;
-    }
-  } catch(e) {}
-  return false;
 }
 
 module.exports.run = async function({ api, event, args }) {
-  const { threadID, messageID } = event;
+  var threadID = event.threadID;
+  var messageID = event.messageID;
 
-  // استخراج الاسم والشعار من الأرقز
-  // صيغة: logo [اسم الشركة] | [اسم الشعار]
-  // أو:   logo [اسم الشركة]
-  const fullInput = args.join(" ").trim();
+  var input = args.join(" ").trim();
 
-  if (!fullInput) {
+  if (!input || input.indexOf("/") === -1) {
     return api.sendMessage(
-      "🎨 تصميم لوغو احترافي\n\n" +
+      "🎨 تصميم لوغو\n\n" +
       "الاستخدام:\n" +
-      "• logo [اسم] — لوغو بدون شعار\n" +
-      "• logo [اسم] | [شعار] — لوغو مع شعار\n\n" +
+      "لوكو [اسم الشركة] / [الشعار]\n\n" +
       "مثال:\n" +
-      "logo Kira\n" +
-      "logo Kira | Ayman",
+      "لوكو Kira / أسرع بوت",
       threadID, messageID
     );
   }
 
-  const parts      = fullInput.split("|").map(s => s.trim());
-  const company    = parts[0] || fullInput;
-  const slogan     = parts[1] || null;
-  const withSlogan = !!slogan;
+  var parts = input.split("/");
+  var company = parts[0].trim();
+  var slogan  = parts[1] ? parts[1].trim() : "";
 
-  if (typeof global.getTgClient !== "function") {
-    return api.sendMessage(
-      "❌ سجّل دخول تيليجرام أولاً:\n.tglogin +964XXXXXXXXXX",
-      threadID, messageID
-    );
-  }
+  if (!company) return api.sendMessage("❌ اكتب اسم الشركة", threadID, messageID);
+  if (!slogan)  return api.sendMessage("❌ اكتب الشعار بعد /", threadID, messageID);
 
-  if (api.setMessageReaction) api.setMessageReaction("⏳", messageID, () => {}, true);
-  api.sendMessage(
-    "🎨 جاري تصميم لوغو لـ: " + company + (slogan ? "\n✏️ الشعار: " + slogan : "") + "\n⏳ انتظر...",
-    threadID, messageID
-  );
+  if (typeof global.getTgClient !== "function")
+    return api.sendMessage("❌ سجّل دخول: .tglogin +964XXXXXXXXXX", threadID, messageID);
 
-  let imgPath = null;
+  try { if (api.setMessageReaction) api.setMessageReaction("⏳", messageID, function() {}, true); } catch(e) {}
+  api.sendMessage("🎨 جاري تصميم لوغو لـ: " + company + "\n⏳ انتظر...", threadID, messageID);
+
+  var imgPath = null;
 
   try {
-    const client = await global.getTgClient();
-    const botEntity = await client.getEntity(BOT);
-    const botId = botEntity.id.toString();
+    var client    = await global.getTgClient();
+    var botEntity = await client.getEntity(BOT);
+    var botId     = botEntity.id.toString();
 
-    // ── الخطوة 1: إرسال /start ──
+    // 1. إرسال /start
     await client.sendMessage(BOT, { message: "/start" });
 
-    // ── الخطوة 2: انتظار رسالة الاختيار (مع الأزرار) ──
-    let choiceMsg;
-    try { choiceMsg = await waitForMessage(client, botId, 15000); }
-    catch(e) { throw new Error("البوت لم يرد على /start"); }
-
-    // ── الخطوة 3: ضغط الزر المناسب ──
-    if (choiceMsg.replyMarkup) {
-      const btnText = withSlogan ? "مع الشعار" : "بدون شعار";
-      await clickButton(client, choiceMsg, btnText);
-      await new Promise(r => setTimeout(r, 1500));
+    // 2. انتظار زر "إنشاء لوغو جديد"
+    var startMsg = await waitForButtons(client, botId, 15000);
+    var rows = startMsg.replyMarkup.rows || [];
+    var newLogoBtn = null;
+    for (var i = 0; i < rows.length; i++) {
+      for (var j = 0; j < (rows[i].buttons || []).length; j++) {
+        if ((rows[i].buttons[j].text || "").indexOf("إنشاء") !== -1 ||
+            (rows[i].buttons[j].text || "").indexOf("جديد") !== -1 ||
+            (rows[i].buttons[j].text || "").indexOf("لوغو") !== -1) {
+          newLogoBtn = rows[i].buttons[j];
+        }
+      }
+    }
+    // اضغط أول زر إذا ما لقينا
+    if (!newLogoBtn && rows[0] && rows[0].buttons && rows[0].buttons[0]) {
+      newLogoBtn = rows[0].buttons[0];
+    }
+    if (newLogoBtn) {
+      try {
+        var { Api } = require("telegram");
+        await client.invoke(new Api.messages.GetBotCallbackAnswer({
+          peer: botEntity, msgId: startMsg.id,
+          data: newLogoBtn.data || Buffer.from(newLogoBtn.text)
+        }));
+      } catch(e) { try { await startMsg.click({ text: newLogoBtn.text }); } catch(e2) {} }
+      await new Promise(function(r) { setTimeout(r, 1500); });
     }
 
-    // ── الخطوة 4: انتظار طلب اسم الشركة ──
-    try { await waitForMessage(client, botId, 10000); }
-    catch(e) {}
+    // 3. انتظار زرين (بدون شعار / مع شعار)
+    var typeMsg = await waitForButtons(client, botId, 15000);
+    var typeRows = typeMsg.replyMarkup.rows || [];
+    var sloganBtn = null;
+    for (var i = 0; i < typeRows.length; i++) {
+      for (var j = 0; j < (typeRows[i].buttons || []).length; j++) {
+        var btnText = typeRows[i].buttons[j].text || "";
+        if (btnText.indexOf("شعار") !== -1 || btnText.indexOf("مع") !== -1) {
+          sloganBtn = typeRows[i].buttons[j];
+        }
+      }
+    }
+    if (!sloganBtn && typeRows[0] && typeRows[0].buttons) {
+      // اختر الزر الأخير (غالباً "مع الشعار")
+      var lastRow = typeRows[typeRows.length - 1];
+      sloganBtn = lastRow.buttons[lastRow.buttons.length - 1];
+    }
+    if (sloganBtn) {
+      try {
+        var { Api } = require("telegram");
+        await client.invoke(new Api.messages.GetBotCallbackAnswer({
+          peer: botEntity, msgId: typeMsg.id,
+          data: sloganBtn.data || Buffer.from(sloganBtn.text)
+        }));
+      } catch(e) { try { await typeMsg.click({ text: sloganBtn.text }); } catch(e2) {} }
+      await new Promise(function(r) { setTimeout(r, 1500); });
+    }
 
-    // ── الخطوة 5: إرسال اسم الشركة ──
+    // 4. انتظار "أرسل اسم الشركة" ثم أرسله
+    await waitForMsg(client, botId, 10000).catch(function() {});
     await client.sendMessage(BOT, { message: company });
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(function(r) { setTimeout(r, 1000); });
 
-    if (withSlogan) {
-      // ── الخطوة 6: انتظار طلب الشعار ──
-      try { await waitForMessage(client, botId, 10000); }
-      catch(e) {}
+    // 5. انتظار "أرسل الشعار" ثم أرسله
+    await waitForMsg(client, botId, 10000).catch(function() {});
+    await client.sendMessage(BOT, { message: slogan });
 
-      // ── الخطوة 7: إرسال اسم الشعار ──
-      await client.sendMessage(BOT, { message: slogan });
-    }
+    // 6. انتظار الصورة
+    var photoMsg = await waitForPhoto(client, botId, 90000);
 
-    // ── الخطوة 8: انتظار الصورة ──
-    const photoMsg = await waitForPhoto(client, botId, 90000);
-
-    // ── الخطوة 9: تنزيل الصورة ──
+    // 7. تنزيل وإرسال الصورة
     imgPath = path.join(process.cwd(), "tmp", "logo_" + Date.now() + ".jpg");
     await fs.ensureDir(path.dirname(imgPath));
     await client.downloadMedia(photoMsg, { outputFile: imgPath });
 
-    // ── الخطوة 10: إرسال الصورة للمستخدم ──
-    await api.sendMessage(
-      {
-        body: "🎨 لوغو: " + company + (slogan ? "\n✏️ " + slogan : "") + "\n\n✅ تم التصميم!",
-        attachment: require("fs").createReadStream(imgPath)
-      },
-      threadID,
-      () => { fs.remove(imgPath).catch(() => {}); },
-      messageID
-    );
+    var stat = await fs.stat(imgPath).catch(function() { return null; });
+    if (!stat || stat.size === 0) throw new Error("الصورة فارغة");
 
-    if (api.setMessageReaction) api.setMessageReaction("✅", messageID, () => {}, true);
+    await new Promise(function(resolve, reject) {
+      api.sendMessage(
+        { body: "🎨 " + company + " | " + slogan, attachment: require("fs").createReadStream(imgPath) },
+        threadID,
+        function(err, info) {
+          fs.remove(imgPath).catch(function() {});
+          if (err) reject(new Error("فشل إرسال الصورة"));
+          else resolve(info);
+        },
+        messageID
+      );
+    });
+
+    try { if (api.setMessageReaction) api.setMessageReaction("✅", messageID, function() {}, true); } catch(e) {}
 
   } catch(e) {
-    if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
-    if (imgPath) fs.remove(imgPath).catch(() => {});
-    console.error("❌ LOGO:", e.message);
-    api.sendMessage(
-      "❌ فشل تصميم اللوغو\n\n" + e.message,
-      threadID, messageID
-    );
+    try { if (api.setMessageReaction) api.setMessageReaction("❌", messageID, function() {}, true); } catch(e2) {}
+    if (imgPath) fs.remove(imgPath).catch(function() {});
+    api.sendMessage("❌ فشل تصميم اللوغو\n\n" + e.message, threadID, messageID);
   }
 };
