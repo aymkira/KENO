@@ -1,17 +1,17 @@
 // ══════════════════════════════════════════════════════════════
-//   autoDownload v4 — تنزيل تلقائي عند مشاركة رابط
+//   autoDownload v4
 //   script/events/autoDownload.js
 //   by Ayman
 // ══════════════════════════════════════════════════════════════
 
-
 const { NewMessage } = require("telegram/events");
 const { Raw }        = require("telegram/events");
+const { Api }        = require("telegram");
 const fs             = require("fs-extra");
 const path           = require("path");
 const axios          = require("axios");
 
-// ══ انتظار رسالة فيها أزرار فقط ══
+// ══ انتظار رسالة فيها أزرار ══
 function waitForButtons(client, botId, timeout) {
   timeout = timeout || 90000;
   return new Promise((resolve, reject) => {
@@ -98,10 +98,24 @@ function extractButtons(msg) {
   for (const row of rows) {
     for (const btn of (row.buttons || [])) {
       const t = btn.text?.trim();
-      if (t && t.length > 0) btns.push(t);
+      if (t && t.length > 0) btns.push({ text: t, data: btn.data });
     }
   }
   return btns;
+}
+
+// ══ ضغط زر عبر invoke مباشرة ══
+async function clickBtn(client, botEntity, msg, btn) {
+  try {
+    await client.invoke(new Api.messages.GetBotCallbackAnswer({
+      peer:   botEntity,
+      msgId:  msg.id,
+      data:   btn.data || Buffer.from(btn.text)
+    }));
+  } catch(e) {
+    // fallback: msg.click
+    try { await msg.click({ text: btn.text }); } catch(e2) {}
+  }
 }
 
 // ══ تنزيل وإرسال الملف ══
@@ -112,26 +126,24 @@ async function downloadAndSend(api, client, msg, threadID, messageID, label) {
   const file    = path.join(tmpDir, "dl_" + Date.now() + ext);
   await fs.ensureDir(tmpDir);
 
-  // ── تنزيل من تيليجرام ──
   await client.downloadMedia(msg, { outputFile: file });
 
-  // تحقق من الملف
   const stat = await fs.stat(file).catch(() => null);
   if (!stat || stat.size === 0) {
     await fs.remove(file).catch(() => {});
-    throw new Error("فشل التنزيل — الملف فارغ");
+    throw new Error("الملف فارغ — فشل التنزيل من تيليجرام");
   }
 
   const sizeMB = (stat.size / 1024 / 1024).toFixed(2);
 
-  // ── إرسال للمسنجر ──
   await new Promise((resolve, reject) => {
     api.sendMessage(
-      { body: (label || "✅") + " | " + sizeMB + " MB", attachment: require("fs").createReadStream(file) },
+      { body: (label || "✅") + " | " + sizeMB + " MB",
+        attachment: require("fs").createReadStream(file) },
       threadID,
       (err, info) => {
         fs.remove(file).catch(() => {});
-        if (err) reject(err);
+        if (err) reject(new Error("فشل إرسال الملف للمسنجر: " + err));
         else resolve(info);
       },
       messageID
@@ -149,17 +161,14 @@ module.exports.config = {
 };
 
 const BOT = "C_5BOT";
-
 const VIDEO_REGEX = /https?:\/\/(www\.)?(youtube\.com\/watch|youtu\.be\/|tiktok\.com\/@[^\/]+\/video|instagram\.com\/(reel|p|tv)\/|facebook\.com\/(watch|reel|videos)|fb\.watch\/|twitter\.com\/[^\/]+\/status|x\.com\/[^\/]+\/status)[^\s]*/i;
 
 module.exports.run = async function({ api, event }) {
   const { threadID, messageID, body, attachments } = event;
   if (typeof global.getTgClient !== "function") return;
 
-  // البحث عن رابط في النص
   let url = body ? (body.match(VIDEO_REGEX) || [])[0] : null;
 
-  // فحص المرفقات (مشاركة ريلز مباشر)
   if (!url && attachments && attachments.length > 0) {
     const att = attachments.find(a =>
       a.type === "share" || a.type === "video" ||
@@ -181,20 +190,17 @@ module.exports.run = async function({ api, event }) {
     const btnsMsg = await waitForButtons(client, botId, 90000);
     const buttons = extractButtons(btnsMsg);
 
-    // إيجاد زر الفيديو وضغطه تلقائياً
     const videoBtn = buttons.find(b =>
-      b.includes("فيديو") || b.includes("video") || b.includes("مقطع")
+      b.text.includes("فيديو") || b.text.includes("video") || b.text.includes("مقطع")
     ) || buttons[0];
 
     if (!videoBtn) throw new Error("لم يتم إيجاد زر الفيديو");
 
-    await btnsMsg.click({ text: videoBtn });
+    await clickBtn(client, botEntity, btnsMsg, videoBtn);
     const fileMsg = await waitForFile(client, botId, 60000);
-
     await downloadAndSend(api, client, fileMsg, threadID, messageID, "✅");
 
     try { if (api.setMessageReaction) api.setMessageReaction("✅", messageID, () => {}, true); } catch(e) {}
-
   } catch(e) {
     try { if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true); } catch(err) {}
     console.error("❌ autoDownload:", e.message);
