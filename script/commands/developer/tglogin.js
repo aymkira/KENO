@@ -1,172 +1,196 @@
 // ══════════════════════════════════════════════════════════════
-//   TGLOGIN — تسجيل دخول حساب تيليجرام الوسيط
-//   يُشغَّل مرة واحدة فقط
+//   TGLOGIN — تسجيل دخول تيليجرام (يُحفظ في MongoDB للأبد)
 //   by Ayman
 // ══════════════════════════════════════════════════════════════
 
 const { TelegramClient } = require("telegram");
 const { StringSession }  = require("telegram/sessions");
 const { Logger }         = require("telegram/extensions");
-const fs                 = require("fs-extra");
+const mongoose           = require("mongoose");
 const path               = require("path");
 
-// إخفاء logs تيليجرام
 Logger.setLevel("none");
 
 module.exports.config = {
   name: "tglogin",
-  version: "1.0.0",
+  version: "2.0.0",
   hasPermssion: 2,
   credits: "Ayman",
-  description: "تسجيل دخول حساب تيليجرام الوسيط — مرة واحدة فقط",
+  description: "تسجيل دخول تيليجرام — يُحفظ في MongoDB",
   commandCategory: "developer",
   usages: "tglogin",
   cooldowns: 5
 };
 
+// ══ Schema لحفظ الـ session في MongoDB ══
+const tgSessionSchema = new mongoose.Schema({
+  key:     { type: String, default: "main" },
+  session: { type: String, default: "" },
+  phone:   { type: String, default: "" },
+  savedAt: { type: Date,   default: Date.now }
+});
+const TgSession = mongoose.models.TgSession ||
+  mongoose.model("TgSession", tgSessionSchema);
+
 const TG_CONFIG = {
-  apiId:       38886989,
-  apiHash:     "d29c090337bce1e1015c766493edab71",
-  sessionPath: path.join(process.cwd(), "includes", "tg_session.txt")
+  apiId:   38886989,
+  apiHash: "d29c090337bce1e1015c766493edab71"
 };
 
-// حالة انتظار الكود
+// ── قراءة الـ session من MongoDB ──
+async function getSession() {
+  try {
+    const doc = await TgSession.findOne({ key: "main" });
+    return doc?.session || "";
+  } catch(e) { return ""; }
+}
+
+// ── حفظ الـ session في MongoDB ──
+async function saveSession(sessionStr, phone) {
+  await TgSession.findOneAndUpdate(
+    { key: "main" },
+    { session: sessionStr, phone, savedAt: new Date() },
+    { upsert: true }
+  );
+}
+
+// ── Singleton client ──
+let tgClient = null;
+global.getTgClient = async function() {
+  if (tgClient && tgClient.connected) return tgClient;
+  const sessionStr = await getSession();
+  if (!sessionStr) throw new Error("SESSION_REQUIRED");
+  const session = new StringSession(sessionStr);
+  tgClient = new TelegramClient(session, TG_CONFIG.apiId, TG_CONFIG.apiHash, {
+    connectionRetries: 5
+  });
+  await tgClient.start({
+    phoneNumber: async () => { throw new Error("SESSION_REQUIRED"); },
+    phoneCode:   async () => { throw new Error("SESSION_REQUIRED"); },
+    password:    async () => { throw new Error("SESSION_REQUIRED"); },
+    onError:     () => {}
+  });
+  return tgClient;
+};
+
 global.tgLoginState = global.tgLoginState || {};
 
 module.exports.run = async function({ api, event, args }) {
   const { threadID, messageID, senderID } = event;
 
-  // تحقق أدمن فقط
   if (!global.config?.ADMINBOT?.includes(senderID))
-    return api.sendMessage("⛔ هذا الأمر للأدمن فقط", threadID, messageID);
+    return api.sendMessage("⛔ للأدمن فقط", threadID, messageID);
 
   const input = args.join(" ").trim();
 
-  // ── إذا في session محفوظة ──
+  // بدون input — عرض الحالة
   if (!input) {
-    const exists = await fs.pathExists(TG_CONFIG.sessionPath);
-    if (exists) {
+    const doc = await TgSession.findOne({ key: "main" });
+    if (doc?.session) {
       return api.sendMessage(
-        "✅ تيليجرام مسجل مسبقاً!\n\n" +
-        "لإعادة التسجيل: tglogin reset\n" +
-        "لاختبار الاتصال: tglogin test",
+        "✅ تيليجرام مسجل ومحفوظ في MongoDB!\n\n" +
+        "📱 الحساب: " + (doc.phone || "غير معروف") + "\n" +
+        "📅 تاريخ التسجيل: " + doc.savedAt.toLocaleDateString("ar") + "\n\n" +
+        "• tglogin test — اختبار الاتصال\n" +
+        "• tglogin reset — إعادة التسجيل",
         threadID, messageID
       );
     }
-
     return api.sendMessage(
-      "📱 لتسجيل حساب تيليجرام:\n\n" +
-      "اكتب: tglogin [رقم هاتفك]\n\n" +
-      "مثال:\n" +
-      "tglogin +9647XXXXXXXXX\n\n" +
+      "📱 تسجيل دخول تيليجرام:\n\n" +
+      "tglogin +964XXXXXXXXXX\n\n" +
       "⚠️ استخدم الحساب الثاني المخصص للبوت",
       threadID, messageID
     );
   }
 
-  // ── reset ──
+  // reset
   if (input === "reset") {
-    await fs.remove(TG_CONFIG.sessionPath).catch(() => {});
+    await TgSession.deleteMany({ key: "main" });
+    tgClient = null;
     global.tgLoginState[senderID] = null;
-    return api.sendMessage("🔄 تم مسح الـ session\nاكتب: tglogin [رقم هاتفك]", threadID, messageID);
+    return api.sendMessage("🔄 تم مسح الـ session\nأعد التسجيل: tglogin +964XXXXXXXXXX", threadID, messageID);
   }
 
-  // ── test ──
+  // test
   if (input === "test") {
     try {
-      const saved   = await fs.readFile(TG_CONFIG.sessionPath, "utf8");
-      const session = new StringSession(saved.trim());
-      const client  = new TelegramClient(session, TG_CONFIG.apiId, TG_CONFIG.apiHash, {
-        connectionRetries: 2,
-        
-      });
-      await client.connect();
+      const client = await global.getTgClient();
       const me = await client.getMe();
-      await client.disconnect();
       return api.sendMessage(
-        `✅ الاتصال يعمل!\n\n👤 الحساب: ${me.firstName} ${me.lastName || ""}\n📱 الرقم: ${me.phone || "مخفي"}`,
+        "✅ الاتصال يعمل!\n\n" +
+        "👤 " + (me.firstName || "") + " " + (me.lastName || "") + "\n" +
+        "📱 " + (me.phone || "مخفي"),
         threadID, messageID
       );
     } catch(e) {
-      return api.sendMessage(`❌ فشل الاتصال: ${e.message}`, threadID, messageID);
+      return api.sendMessage("❌ فشل الاتصال: " + e.message, threadID, messageID);
     }
   }
 
-  // ── إدخال كود التحقق ──
+  // إدخال كود التحقق
   if (global.tgLoginState[senderID]?.waitingCode) {
-    const code   = input.replace(/\s/g, "");
-    const state  = global.tgLoginState[senderID];
-
+    const code  = input.replace(/\s/g, "");
+    const state = global.tgLoginState[senderID];
     try {
       await state.client.start({
         phoneNumber: async () => state.phone,
         phoneCode:   async () => code,
         password:    async () => {
-          api.sendMessage("🔐 الحساب يحتاج كلمة مرور ثنائية\nأرسلها الآن:", threadID, messageID);
-          return new Promise(resolve => {
-            global.tgLoginState[senderID].resolvePassword = resolve;
-          });
+          api.sendMessage("🔐 أرسل كلمة المرور الثنائية:", threadID, messageID);
+          return new Promise(r => { global.tgLoginState[senderID].resolvePwd = r; });
         },
-        onError: (err) => { throw err; }
+        onError: (e) => { throw e; }
       });
-
-      // حفظ الـ session
       const sessionStr = state.client.session.save();
-      await fs.ensureDir(path.dirname(TG_CONFIG.sessionPath));
-      await fs.writeFile(TG_CONFIG.sessionPath, sessionStr, "utf8");
-
+      await saveSession(sessionStr, state.phone);
+      tgClient = state.client;
       global.tgLoginState[senderID] = null;
-
-      api.sendMessage(
-        "✅ تم تسجيل الدخول بنجاح!\n\n" +
-        "الآن تقدر تستخدم:\n" +
-        "• mp3 [رابط] — تحويل لصوت\n\n" +
-        "لاختبار الاتصال: tglogin test",
+      return api.sendMessage(
+        "✅ تم التسجيل وحُفظ في MongoDB!\n\nلن تحتاج تسجيل الدخول مرة أخرى أبداً 🔥",
         threadID, messageID
       );
-
     } catch(e) {
       global.tgLoginState[senderID] = null;
-      api.sendMessage(`❌ كود خاطئ أو منتهي\n${e.message}\n\nحاول من جديد: tglogin [رقم هاتفك]`, threadID, messageID);
+      return api.sendMessage("❌ كود خاطئ: " + e.message, threadID, messageID);
     }
+  }
+
+  // كلمة مرور ثنائية
+  if (global.tgLoginState[senderID]?.resolvePwd) {
+    global.tgLoginState[senderID].resolvePwd(input);
+    global.tgLoginState[senderID].resolvePwd = null;
     return;
   }
 
-  // ── إدخال رقم الهاتف ──
+  // رقم الهاتف
   if (input.startsWith("+") || /^\d{10,15}$/.test(input)) {
-    const phone  = input.startsWith("+") ? input : "+" + input;
+    const phone   = input.startsWith("+") ? input : "+" + input;
     const session = new StringSession("");
     const client  = new TelegramClient(session, TG_CONFIG.apiId, TG_CONFIG.apiHash, {
-      connectionRetries: 3,
-      
+      connectionRetries: 3
     });
-
     try {
       await client.connect();
       await client.sendCode({ apiId: TG_CONFIG.apiId, apiHash: TG_CONFIG.apiHash }, phone);
-
       global.tgLoginState[senderID] = { client, phone, waitingCode: true };
-
-      api.sendMessage(
-        `📲 تم إرسال كود التحقق إلى ${phone}\n\n` +
-        "أرسل الكود هنا:\n" +
-        "tglogin 12345\n\n" +
-        "⚠️ الكود صالح لدقيقتين فقط",
+      return api.sendMessage(
+        "📲 تم إرسال الكود إلى " + phone + "\n\n" +
+        "أرسله هنا: tglogin 12345\n\n" +
+        "⚠️ صالح لدقيقتين فقط",
         threadID, messageID
       );
-
     } catch(e) {
-      api.sendMessage(`❌ فشل إرسال الكود\n${e.message}`, threadID, messageID);
+      return api.sendMessage("❌ فشل إرسال الكود: " + e.message, threadID, messageID);
     }
-    return;
   }
 
   api.sendMessage(
     "❓ استخدام غير صحيح\n\n" +
-    "• tglogin +964XXXXXXXXXX — تسجيل دخول\n" +
-    "• tglogin [الكود] — بعد استلام الكود\n" +
-    "• tglogin test — اختبار الاتصال\n" +
-    "• tglogin reset — إعادة التسجيل",
+    "• tglogin +964XXXXXXXXXX\n" +
+    "• tglogin [الكود]\n" +
+    "• tglogin test\n" +
+    "• tglogin reset",
     threadID, messageID
   );
 };
