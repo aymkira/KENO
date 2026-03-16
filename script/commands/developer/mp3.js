@@ -6,9 +6,12 @@
 const { TelegramClient } = require("telegram");
 const { StringSession }  = require("telegram/sessions");
 const { NewMessage }     = require("telegram/events");
+const { Logger }         = require("telegram/extensions");
 const fs                 = require("fs-extra");
 const path               = require("path");
 const axios              = require("axios");
+
+Logger.setLevel("none");
 
 module.exports.config = {
   name: "mp3",
@@ -65,7 +68,7 @@ async function getTgClient() {
 
   tgClient = new TelegramClient(session, TG_CONFIG.apiId, TG_CONFIG.apiHash, {
     connectionRetries: 3,
-    baseLogger: { levels: [], log: () => {} } // أخفي logs تيليجرام
+     // أخفي logs تيليجرام
   });
 
   await tgClient.start({
