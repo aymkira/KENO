@@ -198,6 +198,7 @@ module.exports = function({ api, models }) {
         handleCommand({ event });
         handleReply({ event });
         handleCommandEvent({ event });
+        handleEvent({ event }); // ← autoDownload وباقي events تشتغل على message
 
         break;
       case "event":
