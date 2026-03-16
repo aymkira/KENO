@@ -1,16 +1,16 @@
 // ══════════════════════════════════════════════════════════════
-//   نزل v7 — تنزيل فيديو مع أزرار اختيار
+//   نزل v7
 //   by Ayman
 // ══════════════════════════════════════════════════════════════
 
-
 const { NewMessage } = require("telegram/events");
 const { Raw }        = require("telegram/events");
+const { Api }        = require("telegram");
 const fs             = require("fs-extra");
 const path           = require("path");
 const axios          = require("axios");
 
-// ══ انتظار رسالة فيها أزرار فقط ══
+// ══ انتظار رسالة فيها أزرار ══
 function waitForButtons(client, botId, timeout) {
   timeout = timeout || 90000;
   return new Promise((resolve, reject) => {
@@ -97,10 +97,24 @@ function extractButtons(msg) {
   for (const row of rows) {
     for (const btn of (row.buttons || [])) {
       const t = btn.text?.trim();
-      if (t && t.length > 0) btns.push(t);
+      if (t && t.length > 0) btns.push({ text: t, data: btn.data });
     }
   }
   return btns;
+}
+
+// ══ ضغط زر عبر invoke مباشرة ══
+async function clickBtn(client, botEntity, msg, btn) {
+  try {
+    await client.invoke(new Api.messages.GetBotCallbackAnswer({
+      peer:   botEntity,
+      msgId:  msg.id,
+      data:   btn.data || Buffer.from(btn.text)
+    }));
+  } catch(e) {
+    // fallback: msg.click
+    try { await msg.click({ text: btn.text }); } catch(e2) {}
+  }
 }
 
 // ══ تنزيل وإرسال الملف ══
@@ -111,26 +125,24 @@ async function downloadAndSend(api, client, msg, threadID, messageID, label) {
   const file    = path.join(tmpDir, "dl_" + Date.now() + ext);
   await fs.ensureDir(tmpDir);
 
-  // ── تنزيل من تيليجرام ──
   await client.downloadMedia(msg, { outputFile: file });
 
-  // تحقق من الملف
   const stat = await fs.stat(file).catch(() => null);
   if (!stat || stat.size === 0) {
     await fs.remove(file).catch(() => {});
-    throw new Error("فشل التنزيل — الملف فارغ");
+    throw new Error("الملف فارغ — فشل التنزيل من تيليجرام");
   }
 
   const sizeMB = (stat.size / 1024 / 1024).toFixed(2);
 
-  // ── إرسال للمسنجر ──
   await new Promise((resolve, reject) => {
     api.sendMessage(
-      { body: (label || "✅") + " | " + sizeMB + " MB", attachment: require("fs").createReadStream(file) },
+      { body: (label || "✅") + " | " + sizeMB + " MB",
+        attachment: require("fs").createReadStream(file) },
       threadID,
       (err, info) => {
         fs.remove(file).catch(() => {});
-        if (err) reject(err);
+        if (err) reject(new Error("فشل إرسال الملف للمسنجر: " + err));
         else resolve(info);
       },
       messageID
@@ -159,16 +171,11 @@ module.exports.run = async function({ api, event, args }) {
   const url = args.join(" ").trim() ||
     event.messageReply?.body?.match(/https?:\/\/[^\s]+/)?.[0];
 
-  if (!url || !url.startsWith("http")) {
-    return api.sendMessage(
-      "⬇️ تنزيل فيديو\n\nالاستخدام: نزل [رابط]\n\n🎬 YouTube | 🎵 TikTok\n📸 Instagram | 👥 Facebook",
-      threadID, messageID
-    );
-  }
+  if (!url || !url.startsWith("http"))
+    return api.sendMessage("⬇️ تنزيل فيديو\n\nنزل [رابط]", threadID, messageID);
 
-  if (typeof global.getTgClient !== "function") {
-    return api.sendMessage("❌ سجّل دخول تيليجرام:\n.tglogin +964XXXXXXXXXX", threadID, messageID);
-  }
+  if (typeof global.getTgClient !== "function")
+    return api.sendMessage("❌ سجّل دخول: .tglogin +964XXXXXXXXXX", threadID, messageID);
 
   if (api.setMessageReaction) api.setMessageReaction("⏳", messageID, () => {}, true);
 
@@ -182,39 +189,35 @@ module.exports.run = async function({ api, event, args }) {
     const buttons = extractButtons(btnsMsg);
 
     let listText = "⬇️ اختر نوع التنزيل:\n\n";
-    buttons.forEach((b, i) => { listText += (i + 1) + ". " + b + "\n"; });
-    listText += "\n↩️ رد برقم اختيارك";
+    buttons.forEach((b, i) => { listText += (i + 1) + ". " + b.text + "\n"; });
+    listText += "\n↩️ رد برقم";
 
     api.sendMessage(listText, threadID, (err, info) => {
       if (err || !info) return;
-      global.نزلSessions[info.messageID] = { btnsMsg, buttons, client, botId };
+      global.نزلSessions[info.messageID] = { btnsMsg, buttons, client, botId, botEntity };
       global.client.handleReply.push({
-        messageID: info.messageID, threadID,
-        name: "نزل", author: senderID
+        messageID: info.messageID, threadID, name: "نزل", author: senderID
       });
     }, messageID);
 
     if (api.setMessageReaction) api.setMessageReaction("✅", messageID, () => {}, true);
-
   } catch(e) {
     if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
-    api.sendMessage("❌ فشل التنزيل\n\n" + e.message, threadID, messageID);
+    api.sendMessage("❌ فشل\n" + e.message, threadID, messageID);
   }
 };
 
 module.exports.handleReply = async function({ api, event, handleReply }) {
   const { threadID, messageID } = event;
   const sentMsgID = handleReply.messageID;
-
   const session = global.نزلSessions[sentMsgID];
   if (!session) return api.sendMessage("❌ انتهت الجلسة", threadID, messageID);
 
-  const { btnsMsg, buttons, client, botId } = session;
+  const { btnsMsg, buttons, client, botId, botEntity } = session;
   const choiceNum = parseInt(event.body?.trim());
 
-  if (!choiceNum || choiceNum < 1 || choiceNum > buttons.length) {
+  if (!choiceNum || choiceNum < 1 || choiceNum > buttons.length)
     return api.sendMessage("❌ اختر بين 1 و " + buttons.length, threadID, messageID);
-  }
 
   delete global.نزلSessions[sentMsgID];
   global.client.handleReply = global.client.handleReply.filter(h => h.messageID !== sentMsgID);
@@ -224,12 +227,12 @@ module.exports.handleReply = async function({ api, event, handleReply }) {
   const selectedBtn = buttons[choiceNum - 1];
 
   try {
-    await btnsMsg.click({ text: selectedBtn });
+    await clickBtn(client, botEntity, btnsMsg, selectedBtn);
     const fileMsg = await waitForFile(client, botId, 60000);
-    await downloadAndSend(api, client, fileMsg, threadID, messageID, selectedBtn);
+    await downloadAndSend(api, client, fileMsg, threadID, messageID, selectedBtn.text);
     if (api.setMessageReaction) api.setMessageReaction("✅", messageID, () => {}, true);
   } catch(e) {
     if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
-    api.sendMessage("❌ فشل التنزيل\n\n" + e.message, threadID, messageID);
+    api.sendMessage("❌ فشل التنزيل\n" + e.message, threadID, messageID);
   }
 };
