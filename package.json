@@ -82,7 +82,7 @@
     "openai": "^4.0.0",
     "tesseract.js": "^4.1.1",
     "wasmoon": "^1.1.1",
-    "noobcore-fca": "^3.0.31",
+    "@dongdev/fca-unofficial": "^3.0.31",
     "canvas": "^2.11.0",
     "moment": "^2.29.4"
   }
