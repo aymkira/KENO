@@ -23,7 +23,7 @@
     "@supercharge/strings": "^1.28.0",
     "@napi-rs/canvas": "^0.1.56",
     "adm-zip": "^0.5.12",
-    "axios": "^1.6.8",
+    "axios": "^1.13.6",
     "bluebird": "^3.7.2",
     "body-parser": "",
     "caesar-salad": "",
