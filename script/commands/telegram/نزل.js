@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════
-//   نزل — تنزيل فيديو من كل مواقع التواصل عبر @X0X0BOT
+//   نزل v2 — تنزيل فيديو مع تفاعل بدل رسالة
 //   by Ayman
 // ══════════════════════════════════════════════════════════════
 
@@ -10,10 +10,10 @@ const axios          = require("axios");
 
 module.exports.config = {
   name: "نزل",
-  version: "1.0.0",
+  version: "2.0.0",
   hasPermssion: 0,
   credits: "Ayman",
-  description: "تنزيل فيديو من كل مواقع التواصل الاجتماعي",
+  description: "تنزيل فيديو من كل مواقع التواصل",
   commandCategory: "media",
   usages: "نزل [رابط]",
   cooldowns: 15
@@ -22,28 +22,24 @@ module.exports.config = {
 const BOT     = "C_5BOT";
 const WAIT_MS = 120000;
 
-// ── إرسال رابط للبوت وانتظار الفيديو ──
 async function sendAndWait(client, botId, url) {
   return new Promise(async (resolve, reject) => {
     const timer = setTimeout(() => {
       client.removeEventHandler(handler, new NewMessage({}));
-      reject(new Error("انتهت مهلة الانتظار — البوت لم يرد"));
+      reject(new Error("انتهت مهلة الانتظار"));
     }, WAIT_MS);
 
     const handler = async (ev) => {
       const msg = ev.message;
       if (msg.peerId?.userId?.toString() !== botId) return;
 
-      // تجاهل رسائل الانتظار القصيرة
       const isWaiting = msg.message && msg.message.length < 30 &&
         !msg.video && !msg.document;
       if (isWaiting) return;
 
-      // تحقق من وجود فيديو أو ملف
-      const hasVideo = msg.video || msg.document?.mimeType?.includes("video") ||
+      const hasVideo = msg.video ||
+        msg.document?.mimeType?.includes("video") ||
         (msg.document?.attributes || []).some(a => a.className === "DocumentAttributeVideo");
-
-      // أو رابط تنزيل في النص
       const hasLink = msg.message?.match(/https?:\/\/[^\s]+\.(mp4|webm|mov)/i);
 
       if (!hasVideo && !hasLink) return;
@@ -55,7 +51,6 @@ async function sendAndWait(client, botId, url) {
 
     client.addEventHandler(handler, new NewMessage({ fromUsers: [BOT] }));
 
-    // إرسال الرابط للبوت
     try {
       await client.sendMessage(BOT, { message: url });
     } catch(e) {
@@ -69,7 +64,6 @@ async function sendAndWait(client, botId, url) {
 module.exports.run = async function({ api, event, args }) {
   const { threadID, messageID } = event;
 
-  // استخراج الرابط
   const url = args.join(" ").trim() ||
     event.messageReply?.body?.match(/https?:\/\/[^\s]+/)?.[0];
 
@@ -79,12 +73,9 @@ module.exports.run = async function({ api, event, args }) {
       "الاستخدام:\n" +
       "نزل [رابط]\n\n" +
       "المواقع المدعومة:\n" +
-      "🎬 YouTube\n" +
-      "🎵 TikTok\n" +
-      "📸 Instagram\n" +
-      "👥 Facebook\n" +
-      "🐦 Twitter/X\n" +
-      "▶️ وغيرها...",
+      "🎬 YouTube | 🎵 TikTok\n" +
+      "📸 Instagram | 👥 Facebook\n" +
+      "🐦 Twitter/X وغيرها",
       threadID, messageID
     );
   }
@@ -96,8 +87,8 @@ module.exports.run = async function({ api, event, args }) {
     );
   }
 
+  // تفاعل بدل رسالة انتظار
   if (api.setMessageReaction) api.setMessageReaction("⏳", messageID, () => {}, true);
-  api.sendMessage("⬇️ جاري التنزيل...\n⏳ انتظر لحظة", threadID, messageID);
 
   let videoPath = null;
 
@@ -106,12 +97,10 @@ module.exports.run = async function({ api, event, args }) {
     const botEntity = await client.getEntity(BOT);
     const botId     = botEntity.id.toString();
 
-    // إرسال الرابط وانتظار الرد
     const resultMsg = await sendAndWait(client, botId, url);
 
     await fs.ensureDir(path.join(process.cwd(), "tmp"));
 
-    // إذا البوت رد بفيديو مباشر
     if (resultMsg.video || resultMsg.document?.mimeType?.includes("video")) {
       videoPath = path.join(process.cwd(), "tmp", "vid_" + Date.now() + ".mp4");
       await client.downloadMedia(resultMsg, { outputFile: videoPath });
@@ -120,7 +109,7 @@ module.exports.run = async function({ api, event, args }) {
 
       await api.sendMessage(
         {
-          body: "✅ تم التنزيل!\n📦 الحجم: " + sizeMB + " MB",
+          body: "✅ " + sizeMB + " MB",
           attachment: require("fs").createReadStream(videoPath)
         },
         threadID,
@@ -129,14 +118,12 @@ module.exports.run = async function({ api, event, args }) {
       );
 
     } else {
-      // البوت رد برابط تنزيل
       const linkMatch = resultMsg.message?.match(/https?:\/\/[^\s]+/);
       if (!linkMatch) throw new Error("البوت لم يرسل فيديو أو رابط تنزيل");
 
-      const dlUrl = linkMatch[0];
-      videoPath   = path.join(process.cwd(), "tmp", "vid_" + Date.now() + ".mp4");
+      videoPath = path.join(process.cwd(), "tmp", "vid_" + Date.now() + ".mp4");
 
-      const res = await axios.get(dlUrl, {
+      const res = await axios.get(linkMatch[0], {
         responseType: "stream",
         timeout: 60000,
         maxContentLength: 50 * 1024 * 1024,
@@ -154,7 +141,7 @@ module.exports.run = async function({ api, event, args }) {
 
       await api.sendMessage(
         {
-          body: "✅ تم التنزيل!\n📦 الحجم: " + sizeMB + " MB",
+          body: "✅ " + sizeMB + " MB",
           attachment: require("fs").createReadStream(videoPath)
         },
         threadID,
@@ -169,10 +156,6 @@ module.exports.run = async function({ api, event, args }) {
     if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
     if (videoPath) fs.remove(videoPath).catch(() => {});
     console.error("❌ نزل:", e.message);
-    api.sendMessage(
-      "❌ فشل التنزيل\n\n" + e.message +
-      "\n\n💡 تأكد من صحة الرابط",
-      threadID, messageID
-    );
+    api.sendMessage("❌ فشل التنزيل\n\n" + e.message, threadID, messageID);
   }
 };
