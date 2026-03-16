@@ -1,13 +1,13 @@
 // ══════════════════════════════════════════════════════════════
 //   TRUECALLER — البحث عن معلومات رقم هاتف عبر @Truecallertobot
-//   by Ayman
+//   by Ayman v2 — يتجاهل رسالة searching
 // ══════════════════════════════════════════════════════════════
 
 const { NewMessage } = require("telegram/events");
 
 module.exports.config = {
   name: "تروكلر",
-  version: "1.0.0",
+  version: "2.0.0",
   hasPermssion: 0,
   credits: "Ayman",
   description: "البحث عن معلومات رقم الهاتف",
@@ -17,7 +17,7 @@ module.exports.config = {
 };
 
 const BOT     = "Truecallertobot";
-const WAIT_MS = 30000;
+const WAIT_MS = 40000;
 
 async function askBot(client, botId, phone) {
   return new Promise(async (resolve, reject) => {
@@ -31,6 +31,21 @@ async function askBot(client, botId, phone) {
       if (msg.peerId?.userId?.toString() !== botId) return;
       if (!msg.message || msg.message.length < 5) return;
 
+      // ── تجاهل رسالة searching وأي رسالة انتظار ──
+      const lower = msg.message.toLowerCase();
+      const isWaiting =
+        lower.includes("searching") ||
+        lower.includes("please wait") ||
+        lower.includes("loading") ||
+        lower.includes("جاري") ||
+        lower.includes("انتظر") ||
+        lower.includes("⏳") ||
+        lower.includes("🔍 searching") ||
+        msg.message.length < 20;
+
+      if (isWaiting) return; // تجاهل وانتظر الرسالة التالية
+
+      // هذه هي رسالة النتيجة الحقيقية
       clearTimeout(timer);
       client.removeEventHandler(handler, new NewMessage({}));
       resolve(msg.message);
@@ -65,7 +80,7 @@ module.exports.run = async function({ api, event, args }) {
     );
   }
 
-  // تنسيق الرقم — تأكد يبدأ بـ +
+  // تنسيق الرقم
   let formattedPhone = phone;
   if (phone.startsWith("00")) {
     formattedPhone = "+" + phone.slice(2);
