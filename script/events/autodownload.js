@@ -1,149 +1,173 @@
-
 // ══════════════════════════════════════════════════════════════
-//   autoDownload — تنزيل تلقائي عند إرسال رابط فيديو
+//   autoDownload — تنزيل تلقائي عند إرسال رابط
 //   script/events/autoDownload.js
 //   by Ayman
 // ══════════════════════════════════════════════════════════════
 
 const { NewMessage } = require("telegram/events");
+const { Raw }        = require("telegram/events");
 const fs             = require("fs-extra");
 const path           = require("path");
 const axios          = require("axios");
 
 module.exports.config = {
   name: "autoDownload",
-  version: "1.0.0",
+  version: "2.0.0",
   credits: "Ayman",
-  description: "تنزيل تلقائي عند إرسال رابط فيديو"
+  description: "تنزيل تلقائي عند مشاركة رابط فيديو"
 };
 
 const BOT     = "C_5BOT";
-const WAIT_MS = 120000;
+const WAIT_MS = 90000;
 
-// ── كشف روابط الفيديو ──
-const VIDEO_REGEX = /https?:\/\/(www\.)?(youtube\.com\/watch|youtu\.be\/|tiktok\.com\/@[^/]+\/video|instagram\.com\/(reel|p|tv)\/|facebook\.com\/(watch|reel|videos)|fb\.watch\/|twitter\.com\/[^/]+\/status|x\.com\/[^/]+\/status)[^\s]*/i;
+const VIDEO_REGEX = /https?:\/\/(www\.)?(youtube\.com\/watch|youtu\.be\/|tiktok\.com\/@[^\/]+\/video|instagram\.com\/(reel|p|tv)\/|facebook\.com\/(watch|reel|videos)|fb\.watch\/|twitter\.com\/[^\/]+\/status|x\.com\/[^\/]+\/status)[^\s]*/i;
 
-async function sendAndWait(client, botId, url) {
-  return new Promise(async (resolve, reject) => {
+function extractChoiceButtons(msg) {
+  const rows = msg.replyMarkup?.rows || [];
+  const buttons = [];
+  for (const row of rows) {
+    for (const btn of (row.buttons || [])) {
+      const text = btn.text?.trim();
+      if (!text || text.length < 2) continue;
+      buttons.push(text);
+    }
+  }
+  return buttons;
+}
+
+function waitForBotMsg(client, botId, timeout = WAIT_MS) {
+  return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      client.removeEventHandler(handler, new NewMessage({}));
-      reject(new Error("انتهت المهلة"));
-    }, WAIT_MS);
+      try { client.removeEventHandler(onNew, new NewMessage({})); } catch(e) {}
+      try { client.removeEventHandler(onRaw, new Raw({})); } catch(e) {}
+      reject(new Error("timeout"));
+    }, timeout);
 
-    const handler = async (ev) => {
-      const msg = ev.message;
-      if (msg.peerId?.userId?.toString() !== botId) return;
+    let resolved = false;
 
-      const isWaiting = msg.message && msg.message.length < 30 &&
-        !msg.video && !msg.document;
-      if (isWaiting) return;
-
-      const hasVideo = msg.video ||
-        msg.document?.mimeType?.includes("video") ||
-        (msg.document?.attributes || []).some(a => a.className === "DocumentAttributeVideo");
-      const hasLink = msg.message?.match(/https?:\/\/[^\s]+\.(mp4|webm|mov)/i);
-
-      if (!hasVideo && !hasLink) return;
-
+    const finish = (msg) => {
+      if (resolved) return;
+      const hasMedia   = msg.video || msg.document || msg.audio;
+      const hasButtons = (msg.replyMarkup?.rows?.length || 0) > 0;
+      const hasText    = msg.message && msg.message.length > 10;
+      if (!hasMedia && !hasButtons && !hasText) return;
+      if (!hasMedia && !hasButtons) {
+        if ((msg.message?.toLowerCase() || "").includes("...") && msg.message.length < 20) return;
+      }
+      resolved = true;
       clearTimeout(timer);
-      client.removeEventHandler(handler, new NewMessage({}));
+      try { client.removeEventHandler(onNew, new NewMessage({})); } catch(e) {}
+      try { client.removeEventHandler(onRaw, new Raw({})); } catch(e) {}
       resolve(msg);
     };
 
-    client.addEventHandler(handler, new NewMessage({ fromUsers: [BOT] }));
+    const onNew = async (ev) => {
+      const msg = ev.message;
+      if (!msg || msg.peerId?.userId?.toString() !== botId) return;
+      finish(msg);
+    };
 
-    try {
-      await client.sendMessage(BOT, { message: url });
-    } catch(e) {
-      clearTimeout(timer);
-      client.removeEventHandler(handler, new NewMessage({}));
-      reject(new Error("فشل إرسال الرابط: " + e.message));
-    }
+    const onRaw = async (update) => {
+      try {
+        if (!(update.className || "").includes("Edit")) return;
+        const msg = update.message;
+        if (!msg) return;
+        const sid = msg.peerId?.userId?.toString() || msg.fromId?.userId?.toString();
+        if (sid !== botId) return;
+        finish(msg);
+      } catch(e) {}
+    };
+
+    client.addEventHandler(onNew, new NewMessage({ fromUsers: [BOT] }));
+    client.addEventHandler(onRaw, new Raw({}));
   });
 }
 
 module.exports.run = async function({ api, event }) {
   const { threadID, messageID, body } = event;
 
-  // تحقق من وجود رابط فيديو في الرسالة
   if (!body) return;
   const match = body.match(VIDEO_REGEX);
   if (!match) return;
+  if (typeof global.getTgClient !== "function") return;
 
   const url = match[0];
 
-  // تحقق من تسجيل تيليجرام
-  if (typeof global.getTgClient !== "function") return;
+  // تفاعل فوري
+  try {
+    if (api.setMessageReaction) api.setMessageReaction("⏳", messageID, () => {}, true);
+  } catch(e) {}
 
-  // تفاعل فوري بدل رسالة
-  if (api.setMessageReaction) api.setMessageReaction("⏳", messageID, () => {}, true);
-
-  let videoPath = null;
+  let filePath = null;
 
   try {
     const client    = await global.getTgClient();
     const botEntity = await client.getEntity(BOT);
     const botId     = botEntity.id.toString();
 
-    const resultMsg = await sendAndWait(client, botId, url);
+    await client.sendMessage(BOT, { message: url });
+    const resultMsg = await waitForBotMsg(client, botId, WAIT_MS);
 
     await fs.ensureDir(path.join(process.cwd(), "tmp"));
 
-    if (resultMsg.video || resultMsg.document?.mimeType?.includes("video")) {
-      videoPath = path.join(process.cwd(), "tmp", "vid_" + Date.now() + ".mp4");
-      await client.downloadMedia(resultMsg, { outputFile: videoPath });
+    // إذا في أزرار — اضغط أول زر فيديو تلقائياً
+    const buttons = extractChoiceButtons(resultMsg);
+    let finalMsg  = resultMsg;
 
-      const sizeMB = ((await fs.stat(videoPath)).size / 1024 / 1024).toFixed(2);
+    if (buttons.length > 0) {
+      // اضغط أول زر يحتوي على "فيديو" أو أول زر
+      const videoBtn = buttons.find(b =>
+        b.includes("فيديو") || b.includes("video") || b.includes("مقطع")
+      ) || buttons[0];
 
+      await resultMsg.click({ text: videoBtn });
+      finalMsg = await waitForBotMsg(client, botId, 60000);
+    }
+
+    // تنزيل وإرسال
+    const hasMedia = finalMsg.video || finalMsg.audio ||
+      finalMsg.document?.mimeType?.includes("video") ||
+      finalMsg.document?.mimeType?.includes("audio");
+
+    if (hasMedia) {
+      const ext = finalMsg.audio || finalMsg.document?.mimeType?.includes("audio") ? ".mp3" : ".mp4";
+      filePath = path.join(process.cwd(), "tmp", "auto_" + Date.now() + ext);
+      await client.downloadMedia(finalMsg, { outputFile: filePath });
+      const sizeMB = ((await fs.stat(filePath)).size / 1024 / 1024).toFixed(2);
       await api.sendMessage(
-        {
-          body: "✅ " + sizeMB + " MB",
-          attachment: require("fs").createReadStream(videoPath)
-        },
-        threadID,
-        () => { fs.remove(videoPath).catch(() => {}); },
-        messageID
+        { body: "✅ " + sizeMB + " MB", attachment: require("fs").createReadStream(filePath) },
+        threadID, () => { fs.remove(filePath).catch(() => {}); }, messageID
       );
-
     } else {
-      const linkMatch = resultMsg.message?.match(/https?:\/\/[^\s]+/);
-      if (!linkMatch) throw new Error("لم يتم إيجاد رابط تنزيل");
-
-      const dlUrl = linkMatch[0];
-      videoPath   = path.join(process.cwd(), "tmp", "vid_" + Date.now() + ".mp4");
-
-      const res = await axios.get(dlUrl, {
-        responseType: "stream",
-        timeout: 60000,
+      const linkMatch = finalMsg.message?.match(/https?:\/\/[^\s]+/);
+      if (!linkMatch) throw new Error("no link");
+      filePath = path.join(process.cwd(), "tmp", "auto_" + Date.now() + ".mp4");
+      const res = await axios.get(linkMatch[0], {
+        responseType: "stream", timeout: 60000,
         maxContentLength: 50 * 1024 * 1024,
         headers: { "User-Agent": "Mozilla/5.0" }
       });
-
-      await new Promise((res2, rej) => {
-        const w = fs.createWriteStream(videoPath);
+      await new Promise((r, j) => {
+        const w = fs.createWriteStream(filePath);
         res.data.pipe(w);
-        w.on("finish", res2);
-        w.on("error", rej);
+        w.on("finish", r); w.on("error", j);
       });
-
-      const sizeMB = ((await fs.stat(videoPath)).size / 1024 / 1024).toFixed(2);
-
+      const sizeMB = ((await fs.stat(filePath)).size / 1024 / 1024).toFixed(2);
       await api.sendMessage(
-        {
-          body: "✅ " + sizeMB + " MB",
-          attachment: require("fs").createReadStream(videoPath)
-        },
-        threadID,
-        () => { fs.remove(videoPath).catch(() => {}); },
-        messageID
+        { body: "✅ " + sizeMB + " MB", attachment: require("fs").createReadStream(filePath) },
+        threadID, () => { fs.remove(filePath).catch(() => {}); }, messageID
       );
     }
 
-    if (api.setMessageReaction) api.setMessageReaction("✅", messageID, () => {}, true);
+    try {
+      if (api.setMessageReaction) api.setMessageReaction("✅", messageID, () => {}, true);
+    } catch(e) {}
 
   } catch(e) {
-    if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
-    if (videoPath) fs.remove(videoPath).catch(() => {});
+    try {
+      if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
+    } catch(err) {}
+    if (filePath) fs.remove(filePath).catch(() => {});
     console.error("❌ autoDownload:", e.message);
   }
 };
