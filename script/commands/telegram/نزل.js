@@ -19,7 +19,7 @@ module.exports.config = {
   cooldowns: 15
 };
 
-const BOT     = "X0X0BOT";
+const BOT     = "C_5BOT";
 const WAIT_MS = 120000;
 
 // ── إرسال رابط للبوت وانتظار الفيديو ──
