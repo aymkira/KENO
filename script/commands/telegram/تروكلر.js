@@ -1,18 +1,14 @@
-// ══════════════════════════════════════════════════════════════
-//   TRUECALLER — البحث عن معلومات رقم هاتف عبر @Truecallertobot
-//   by Ayman v3
-// ══════════════════════════════════════════════════════════════
-
+// تروكلر v4 — يأخذ أطول رسالة (30+ حرف)
 const { NewMessage } = require("telegram/events");
 
 module.exports.config = {
   name: "تروكلر",
-  version: "3.0.0",
+  version: "4.0.0",
   hasPermssion: 0,
   credits: "Ayman",
   description: "البحث عن معلومات رقم الهاتف",
   commandCategory: "tools",
-  usages: "تروكلر [رقم الهاتف]",
+  usages: "تروكلر [رقم]",
   cooldowns: 10
 };
 
@@ -20,47 +16,48 @@ const BOT     = "Truecallertobot";
 const WAIT_MS = 40000;
 
 async function askBot(client, botId, phone) {
-  return new Promise(async (resolve, reject) => {
-    const messages   = [];
-    let collectTimer = null;
+  return new Promise(async function(resolve, reject) {
+    var messages = [];
+    var collectTimer = null;
 
-    const timer = setTimeout(() => {
+    var timer = setTimeout(function() {
       client.removeEventHandler(handler, new NewMessage({}));
-      // إذا جمعنا رسائل ارجعها حتى لو انتهى الوقت
       if (messages.length > 0) {
-        resolve(messages.join("\n\n"));
+        // أرجع أطول رسالة
+        var longest = messages.reduce(function(a, b) { return a.length >= b.length ? a : b; });
+        resolve(longest);
       } else {
         reject(new Error("البوت لم يرد — تأكد من صحة الرقم"));
       }
     }, WAIT_MS);
 
-    const handler = async (ev) => {
-      const msg = ev.message;
-      if (msg.peerId?.userId?.toString() !== botId) return;
+    async function handler(ev) {
+      var msg = ev.message;
+      if (!msg.peerId || msg.peerId.userId == null) return;
+      if (msg.peerId.userId.toString() !== botId) return;
       if (!msg.message || msg.message.length < 3) return;
 
-      const lower = msg.message.toLowerCase();
+      var lower = msg.message.toLowerCase();
+      if (lower.indexOf("searching") !== -1 ||
+          lower.indexOf("please wait") !== -1 ||
+          lower.indexOf("loading") !== -1 ||
+          lower.indexOf("جاري") !== -1 ||
+          lower.indexOf("انتظر") !== -1) return;
 
-      // تجاهل رسائل الانتظار
-      if (
-        lower.includes("searching") ||
-        lower.includes("please wait") ||
-        lower.includes("loading") ||
-        lower.includes("جاري") ||
-        lower.includes("انتظر")
-      ) return;
+      // قبول فقط رسائل 30+ حرف
+      if (msg.message.length < 30) return;
 
-      // أضف الرسالة للمجموعة
       messages.push(msg.message);
 
-      // بعد أول رسالة حقيقية — انتظر 4 ثواني لجمع باقي الرسائل
       if (collectTimer) clearTimeout(collectTimer);
-      collectTimer = setTimeout(() => {
+      collectTimer = setTimeout(function() {
         clearTimeout(timer);
         client.removeEventHandler(handler, new NewMessage({}));
-        resolve(messages.join("\n\n─────────────\n\n"));
+        // أرجع أطول رسالة
+        var longest = messages.reduce(function(a, b) { return a.length >= b.length ? a : b; });
+        resolve(longest);
       }, 4000);
-    };
+    }
 
     client.addEventHandler(handler, new NewMessage({ fromUsers: [BOT] }));
 
@@ -75,60 +72,33 @@ async function askBot(client, botId, phone) {
 }
 
 module.exports.run = async function({ api, event, args }) {
-  const { threadID, messageID } = event;
+  var threadID = event.threadID;
+  var messageID = event.messageID;
+  var phone = args.join("").trim();
 
-  const phone = args.join("").trim();
+  if (!phone) return api.sendMessage(
+    "📞 البحث عن معلومات رقم الهاتف\n\nتروكلر [رقم]\n\nمثال:\nتروكلر +9647XXXXXXXXX",
+    threadID, messageID
+  );
 
-  if (!phone) {
-    return api.sendMessage(
-      "📞 البحث عن معلومات رقم الهاتف\n\n" +
-      "الاستخدام:\n" +
-      "تروكلر [رقم]\n\n" +
-      "مثال:\n" +
-      "تروكلر +9647XXXXXXXXX\n" +
-      "تروكلر 009647XXXXXXXXX",
-      threadID, messageID
-    );
-  }
+  if (phone.indexOf("00") === 0) phone = "+" + phone.slice(2);
+  else if (phone.indexOf("+") !== 0) phone = "+" + phone;
 
-  // تنسيق الرقم
-  let formattedPhone = phone;
-  if (phone.startsWith("00")) {
-    formattedPhone = "+" + phone.slice(2);
-  } else if (!phone.startsWith("+")) {
-    formattedPhone = "+" + phone;
-  }
+  if (typeof global.getTgClient !== "function")
+    return api.sendMessage("❌ سجّل دخول: .tglogin +964XXXXXXXXXX", threadID, messageID);
 
-  if (typeof global.getTgClient !== "function") {
-    return api.sendMessage(
-      "❌ سجّل دخول تيليجرام أولاً:\n.tglogin +964XXXXXXXXXX",
-      threadID, messageID
-    );
-  }
-
-  if (api.setMessageReaction) api.setMessageReaction("⏳", messageID, () => {}, true);
-  api.sendMessage("🔍 جاري البحث عن: " + formattedPhone + "...", threadID, messageID);
+  try { if (api.setMessageReaction) api.setMessageReaction("⏳", messageID, function() {}, true); } catch(e) {}
+  api.sendMessage("🔍 جاري البحث عن: " + phone + "...", threadID, messageID);
 
   try {
-    const client    = await global.getTgClient();
-    const botEntity = await client.getEntity(BOT);
-    const botId     = botEntity.id.toString();
-
-    const result = await askBot(client, botId, formattedPhone);
-
-    api.sendMessage(
-      "📞 نتيجة البحث:\n\n" + result,
-      threadID, messageID
-    );
-
-    if (api.setMessageReaction) api.setMessageReaction("✅", messageID, () => {}, true);
-
+    var client = await global.getTgClient();
+    var botEntity = await client.getEntity(BOT);
+    var botId = botEntity.id.toString();
+    var result = await askBot(client, botId, phone);
+    api.sendMessage("📞 نتيجة البحث:\n\n" + result, threadID, messageID);
+    try { if (api.setMessageReaction) api.setMessageReaction("✅", messageID, function() {}, true); } catch(e) {}
   } catch(e) {
-    if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
-    console.error("❌ تروكلر:", e.message);
-    api.sendMessage(
-      "❌ فشل البحث\n\n" + e.message,
-      threadID, messageID
-    );
+    try { if (api.setMessageReaction) api.setMessageReaction("❌", messageID, function() {}, true); } catch(e2) {}
+    api.sendMessage("❌ فشل البحث\n\n" + e.message, threadID, messageID);
   }
 };
