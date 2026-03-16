@@ -6,9 +6,12 @@
 
 const { TelegramClient } = require("telegram");
 const { StringSession }  = require("telegram/sessions");
+const { Logger }         = require("telegram/extensions");
 const fs                 = require("fs-extra");
 const path               = require("path");
-const readline           = require("readline");
+
+// إخفاء logs تيليجرام
+Logger.setLevel("none");
 
 module.exports.config = {
   name: "tglogin",
@@ -75,7 +78,7 @@ module.exports.run = async function({ api, event, args }) {
       const session = new StringSession(saved.trim());
       const client  = new TelegramClient(session, TG_CONFIG.apiId, TG_CONFIG.apiHash, {
         connectionRetries: 2,
-        baseLogger: { levels: [], log: () => {} }
+        
       });
       await client.connect();
       const me = await client.getMe();
@@ -135,7 +138,7 @@ module.exports.run = async function({ api, event, args }) {
     const session = new StringSession("");
     const client  = new TelegramClient(session, TG_CONFIG.apiId, TG_CONFIG.apiHash, {
       connectionRetries: 3,
-      baseLogger: { levels: [], log: () => {} }
+      
     });
 
     try {
