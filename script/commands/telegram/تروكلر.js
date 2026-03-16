@@ -1,13 +1,13 @@
 // ══════════════════════════════════════════════════════════════
 //   TRUECALLER — البحث عن معلومات رقم هاتف عبر @Truecallertobot
-//   by Ayman v2 — يتجاهل رسالة searching
+//   by Ayman v3
 // ══════════════════════════════════════════════════════════════
 
 const { NewMessage } = require("telegram/events");
 
 module.exports.config = {
   name: "تروكلر",
-  version: "2.0.0",
+  version: "3.0.0",
   hasPermssion: 0,
   credits: "Ayman",
   description: "البحث عن معلومات رقم الهاتف",
@@ -21,34 +21,45 @@ const WAIT_MS = 40000;
 
 async function askBot(client, botId, phone) {
   return new Promise(async (resolve, reject) => {
+    const messages   = [];
+    let collectTimer = null;
+
     const timer = setTimeout(() => {
       client.removeEventHandler(handler, new NewMessage({}));
-      reject(new Error("البوت لم يرد — تأكد من صحة الرقم"));
+      // إذا جمعنا رسائل ارجعها حتى لو انتهى الوقت
+      if (messages.length > 0) {
+        resolve(messages.join("\n\n"));
+      } else {
+        reject(new Error("البوت لم يرد — تأكد من صحة الرقم"));
+      }
     }, WAIT_MS);
 
     const handler = async (ev) => {
       const msg = ev.message;
       if (msg.peerId?.userId?.toString() !== botId) return;
-      if (!msg.message || msg.message.length < 5) return;
+      if (!msg.message || msg.message.length < 3) return;
 
-      // ── تجاهل رسالة searching وأي رسالة انتظار ──
       const lower = msg.message.toLowerCase();
-      const isWaiting =
+
+      // تجاهل رسائل الانتظار
+      if (
         lower.includes("searching") ||
         lower.includes("please wait") ||
         lower.includes("loading") ||
         lower.includes("جاري") ||
-        lower.includes("انتظر") ||
-        lower.includes("⏳") ||
-        lower.includes("🔍 searching") ||
-        msg.message.length < 20;
+        lower.includes("انتظر")
+      ) return;
 
-      if (isWaiting) return; // تجاهل وانتظر الرسالة التالية
+      // أضف الرسالة للمجموعة
+      messages.push(msg.message);
 
-      // هذه هي رسالة النتيجة الحقيقية
-      clearTimeout(timer);
-      client.removeEventHandler(handler, new NewMessage({}));
-      resolve(msg.message);
+      // بعد أول رسالة حقيقية — انتظر 4 ثواني لجمع باقي الرسائل
+      if (collectTimer) clearTimeout(collectTimer);
+      collectTimer = setTimeout(() => {
+        clearTimeout(timer);
+        client.removeEventHandler(handler, new NewMessage({}));
+        resolve(messages.join("\n\n─────────────\n\n"));
+      }, 4000);
     };
 
     client.addEventHandler(handler, new NewMessage({ fromUsers: [BOT] }));
