@@ -28,6 +28,10 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         senderID = String(senderID);
         threadID = String(threadID);
 
+        // ─── فلتر الـ DM (inbox) ─────────────────────────────────
+        const isDM = senderID === threadID;
+        if (isDM && !allowInbox) return;
+
         // ─── البادئة ────────────────────────────────────────────
         const threadSetting = threadData.get(threadID) || {};
         const prefix = threadSetting.hasOwnProperty("PREFIX") ? threadSetting.PREFIX : PREFIX;
