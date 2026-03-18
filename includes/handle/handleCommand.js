@@ -28,7 +28,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         senderID = String(senderID);
         threadID = String(threadID);
 
-        // ─── فلتر الـ DM (inbox) ─────────────────────────────────
+        // ─── فلتر الـ DM ─────────────────────────────────────────
         const isDM = senderID === threadID;
         if (isDM && !allowInbox) return;
 
@@ -122,10 +122,16 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
 
         // ─── الصلاحيات ──────────────────────────────────────────
         let permssion = 0;
-        const threadInfoo2 = threadInfo.get(threadID) || (await Threads.getInfo(threadID));
-        const isGroupAdmin = threadInfoo2.adminIDs?.find(el => el.id == senderID);
-        if (ADMINBOT.includes(senderID.toString())) permssion = 2;
-        else if (isGroupAdmin) permssion = 1;
+        if (ADMINBOT.includes(senderID.toString())) {
+            permssion = 2;
+        } else if (!isDM) {
+            // فحص adminIDs فقط في القروبات وليس الـ DM
+            try {
+                const threadInfoo2 = threadInfo.get(threadID) || (await Threads.getInfo(threadID));
+                const isGroupAdmin = threadInfoo2.adminIDs?.find(el => el.id == senderID);
+                if (isGroupAdmin) permssion = 1;
+            } catch(_) {}
+        }
 
         if (command.config.hasPermssion > permssion) {
             return api.sendMessage(
