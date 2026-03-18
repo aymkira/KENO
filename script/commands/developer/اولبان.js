@@ -1,6 +1,5 @@
 const fs   = require('fs');
 const path = require('path');
-const moment = require('moment-timezone');
 
 function loadConfig() {
   for (const p of [
@@ -9,6 +8,7 @@ function loadConfig() {
   ]) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch(_){} }
   return {};
 }
+
 const CFG       = loadConfig();
 const ADMIN_IDS = (CFG.ADMINBOT || []).map(String);
 const MONGO_URI = CFG.MONGODB_URI || '';
@@ -19,13 +19,25 @@ async function initMongo() {
   if (mongoReady || !MONGO_URI) return;
   try {
     if (mongoose.connection.readyState === 0) await mongoose.connect(MONGO_URI);
-    const s = new mongoose.Schema({ type:String, targetID:String, bannedBy:String, bannedByName:String, threadID:String, reason:String, action:String, date:{type:Date,default:Date.now} });
+    const s = new mongoose.Schema({
+      type:String, targetID:String, bannedBy:String,
+      bannedByName:String, threadID:String,
+      reason:String, action:String,
+      date:{ type:Date, default:Date.now }
+    });
     BanLog = mongoose.models.BanLog || mongoose.model('BanLog', s);
     mongoReady = true;
   } catch(_) {}
 }
-async function logDB(d) { try { await initMongo(); if(BanLog) await BanLog.create(d); } catch(_) {} }
+async function logDB(d) {
+  try { await initMongo(); if (BanLog) await BanLog.create(d); } catch(_) {}
+}
 
+function getTime() {
+  return new Date().toLocaleString('ar-IQ', { timeZone:'Asia/Baghdad', hour12:false });
+}
+
+// ══════════════════════════════════════════════════
 module.exports.config = {
   name: 'اولبان',
   version: '4.0.0',
@@ -33,23 +45,25 @@ module.exports.config = {
   credits: 'ayman',
   description: 'حظر/فتح المجموعة كاملة — للمطور فقط',
   commandCategory: 'admin',
-  usages: '.اولبان [سبب] ← يحظر المجموعة\n.اولبان مجدداً ← يرفع الحظر',
+  usages: '.اولبان [سبب] ← يحظر\n.اولبان مجدداً ← يرفع',
   cooldowns: 3,
 };
 
 module.exports.run = async function({ api, event, Users, Threads }) {
   const { threadID, messageID, senderID, body } = event;
-  if (!ADMIN_IDS.includes(String(senderID))) return api.sendMessage('⌬ ━━ 𝗞𝗜𝗥𝗔 ADMIN ━━ ⌬\n\n🚫 للمطور فقط.', threadID, messageID);
 
-  const time      = moment.tz('Asia/Baghdad').format('DD/MM/YYYY — HH:mm');
+  if (!ADMIN_IDS.includes(String(senderID)))
+    return api.sendMessage('⌬ ━━ 𝗞𝗜𝗥𝗔 ADMIN ━━ ⌬\n\n🚫 للمطور فقط.', threadID, messageID);
+
   const getName   = async id => { try { return await Users.getNameUser(id); } catch(_) { return id; } };
   const adminName = await getName(senderID);
-  const after     = body?.includes('|') ? body.split('|')[1]?.trim() : '';
+  const time      = getTime();
+  const after     = (body || '').includes('|') ? body.split('|')[1]?.trim() : '';
   const reason    = after || 'لا يوجد سبب';
   const isBanned  = global.data.threadBanned?.has(threadID);
 
   if (isBanned) {
-    // رفع حظر المجموعة
+    // رفع الحظر
     global.data.threadBanned?.delete(threadID);
     try {
       const td = (await Threads.getData(threadID))?.data || {};
@@ -58,7 +72,7 @@ module.exports.run = async function({ api, event, Users, Threads }) {
     } catch(_) {}
     await logDB({ type:'thread', targetID:threadID, bannedBy:senderID, bannedByName:adminName, threadID, action:'unban' });
     return api.sendMessage(
-      `⌬ ━━ 𝗞𝗜𝗥𝗔 ADMIN ━━ ⌬\n\n✅ تم فتح المجموعة!\n\n👮 ${adminName}\n🕐 ${time}`,
+      `⌬ ━━ 𝗞𝗜𝗥𝗔 ADMIN ━━ ⌬\n\n✅ تم فتح المجموعة!\n👮 ${adminName}\n🕐 ${time}`,
       threadID, messageID
     );
   }
@@ -72,7 +86,7 @@ module.exports.run = async function({ api, event, Users, Threads }) {
   } catch(_) {}
   await logDB({ type:'thread', targetID:threadID, bannedBy:senderID, bannedByName:adminName, threadID, reason, action:'allban' });
   return api.sendMessage(
-    `⌬ ━━ 𝗞𝗜𝗥𝗔 ADMIN ━━ ⌬\n\n🔴 تم حظر المجموعة!\n\n📋 السبب: ${reason}\n👮 ${adminName}\n🕐 ${time}\n\n⚠️ كتابة .اولبان مجدداً لرفع الحظر`,
+    `⌬ ━━ 𝗞𝗜𝗥𝗔 ADMIN ━━ ⌬\n\n🔴 تم حظر المجموعة!\n\n📋 السبب: ${reason}\n👮 ${adminName}\n🕐 ${time}\n\n⚠️ .اولبان مجدداً لرفع الحظر`,
     threadID, messageID
   );
 };
