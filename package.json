@@ -54,7 +54,7 @@
     "axios": "^1.7.9",
     "bluebird": "^3.7.2",
     "body-parser": "^1.20.3",
-    "caesar-salad": "^1.0.4",
+    "caesar-salad": "^2.1.0",
     "chalk": "^4.1.2",
     "cheerio": "^1.0.0",
     "discord-image-generation": "^1.4.25",
