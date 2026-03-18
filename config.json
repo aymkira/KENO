@@ -265,5 +265,7 @@
     "lbot": {
         "autoUnsend": true,
         "delayUnsend": 30
-    }
+    },
+    "GROQ_API_KEY": "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",
+    "MONGODB_URI": "mongodb+srv://kkayman200_db_user:ukhzlLzjRxQgSnTl@cluster0.7nsuoil.mongodb.net/KiraDB?retryWrites=true&w=majority"
 }
