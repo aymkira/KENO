@@ -28,10 +28,6 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         senderID = String(senderID);
         threadID = String(threadID);
 
-        // ─── فلتر الـ DM ─────────────────────────────────────────
-        const isDM = senderID === threadID;
-        if (isDM && !allowInbox) return;
-
         // ─── البادئة ────────────────────────────────────────────
         const threadSetting = threadData.get(threadID) || {};
         const prefix = threadSetting.hasOwnProperty("PREFIX") ? threadSetting.PREFIX : PREFIX;
@@ -48,7 +44,11 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
 
         // ─── فلاتر الحظر والأوضاع ───────────────────────────────
         if (threadBanned.has(threadID) && !ADMINBOT.includes(senderID)) return;
-        if (userBanned.has(senderID) && !ADMINBOT.includes(senderID)) return;
+        if (userBanned.has(senderID) && !ADMINBOT.includes(senderID)) {
+            // 🚫 تفاعل على أوامر المحظورين
+            try { api.setMessageReaction('🚫', messageID, () => {}, true); } catch(_) {}
+            return;
+        }
         if (YASSIN === "true" && !ADMINBOT.includes(senderID)) return;
         if (adminOnly && !ADMINBOT.includes(senderID)) return;
 
@@ -122,16 +122,10 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
 
         // ─── الصلاحيات ──────────────────────────────────────────
         let permssion = 0;
-        if (ADMINBOT.includes(senderID.toString())) {
-            permssion = 2;
-        } else if (!isDM) {
-            // فحص adminIDs فقط في القروبات وليس الـ DM
-            try {
-                const threadInfoo2 = threadInfo.get(threadID) || (await Threads.getInfo(threadID));
-                const isGroupAdmin = threadInfoo2.adminIDs?.find(el => el.id == senderID);
-                if (isGroupAdmin) permssion = 1;
-            } catch(_) {}
-        }
+        const threadInfoo2 = threadInfo.get(threadID) || (await Threads.getInfo(threadID));
+        const isGroupAdmin = threadInfoo2.adminIDs?.find(el => el.id == senderID);
+        if (ADMINBOT.includes(senderID.toString())) permssion = 2;
+        else if (isGroupAdmin) permssion = 1;
 
         if (command.config.hasPermssion > permssion) {
             return api.sendMessage(
