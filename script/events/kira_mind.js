@@ -12,11 +12,21 @@ const path     = require('path');
 // ══════════════════════════════════════════════════
 //  قراءة الإعدادات
 // ══════════════════════════════════════════════════
-const configPath = path.join(__dirname, '../../..', 'config.json');
-const CFG        = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+function loadConfig() {
+  const paths = [
+    path.join(__dirname, '../../..', 'config.json'),
+    path.join(__dirname, '../../../..', 'config.json'),
+    path.join(process.cwd(), 'config.json'),
+  ];
+  for (const p of paths) {
+    try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (_) {}
+  }
+  return {};
+}
+const CFG = loadConfig();
 
 const GROQ_KEY  = CFG.GROQ_API_KEY  || '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';
-const MONGO_URI = CFG.MONGODB_URI   || 'mongodb+srv://kkayman200_db_user:ukhzlLzjRxQgSnTl@cluster0.7nsuoil.mongodb.net/KiraDB?retryWrites=true&w=majority';
+const MONGO_URI = CFG.MONGODB_URI   || '';
 const MODEL     = 'llama-3.3-70b-versatile';
 const ADMIN_ID  = '61580139921634';
 
