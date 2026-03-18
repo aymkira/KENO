@@ -27,7 +27,7 @@ module.exports = function ({ Users, Threads, Currencies }) {
             // ════════════════════════════════════════════════════
             // 🏘️ إنشاء بيانات المجموعة
             // ════════════════════════════════════════════════════
-            if (!allThreadID.includes(threadID) && event.isGroup) {
+            if (!allThreadID.includes(threadID) && (event.isGroup || senderID === threadID)) {
                 const threadIn4 = await Threads.getInfo(threadID);
                 const c1 = randColor(), c2 = randColor(), c3 = randColor();
 
