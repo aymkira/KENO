@@ -1,8 +1,6 @@
 module.exports = function ({ Users, Threads, Currencies }) {
     const logger = require("../../utils/log.js");
     const chalk  = require("chalk");
-
-    const logger  = require("../../utils/log.js");
     const moment   = require("moment-timezone");
     const _dbLog   = (type, detail) => {
         if (!global.config?.DeveloperMode) return;
