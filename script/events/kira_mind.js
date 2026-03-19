@@ -100,7 +100,8 @@ async function updateProfile(userID, userName, a, isAdmin) {
   const db  = getDB();
   if (!db) return;
 
-  const old = await db.getUser(userID) || {};
+  // يقرأ من analysis.json بدل users.json
+  const old = await db.getAnalysis(userID) || {};
   const merge = (a1 = [], a2 = [], max = 30) =>
     [...new Set([...a1, ...a2])].filter(Boolean).slice(0, max);
 
@@ -108,7 +109,7 @@ async function updateProfile(userID, userName, a, isAdmin) {
   const conf = Math.min(Math.round(5 + n * 1.2 + (n > 15 ? 15 : 0) + (n > 40 ? 15 : 0)), 98);
   const moodDelta = Math.abs((a.mood_score || 50) - (old.moodScore || 50));
 
-  await db.setUser(userID, {
+  await db.setAnalysis(userID, {
     name: userName || old.name,
     isAdmin,
     lastSeen: new Date().toISOString(),
@@ -187,7 +188,7 @@ module.exports.run = async function({ api, event }) {
     let userName = 'مجهول';
     try { const i = await api.getUserInfo(userID); userName = i[userID]?.name || 'مجهول'; } catch(_){}
 
-    const existing = await db.getUser(userID);
+    const existing = await db.getAnalysis(userID);
 
     if (!existing) {
       if (!pending.has(userID)) pending.set(userID, []);
@@ -200,6 +201,7 @@ module.exports.run = async function({ api, event }) {
       const a = await analyze(bodies, userName, null, isAdmin);
       await updateProfile(userID, userName, a, isAdmin);
       await db.logEvent('new_profile', { userID, name: userName });
+      await db.ensureUser(userID, userName); // تسجيل في users.json أيضاً
       console.log(`[ KIRA MIND ] ✅ ${userName}`);
       return;
     }
@@ -214,8 +216,8 @@ module.exports.run = async function({ api, event }) {
 };
 
 // ── دوال مُصدَّرة ─────────────────────────────────
-module.exports.getUser    = id => getDB()?.getUser(String(id));
-module.exports.getAllUsers = ()  => getDB()?.getAllUsers() || [];
+module.exports.getUser    = id => getDB()?.getAnalysis(String(id));
+module.exports.getAllUsers = ()  => getDB()?.getAllAnalysis() || [];
 module.exports.ADMIN_ID   = ADMIN_ID;
 
 module.exports.formatReport = function(p, admin = false) {
