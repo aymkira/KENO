@@ -1,57 +1,65 @@
-const path = require("path");
+const fs   = require('fs');
+const path = require('path');
+
+function loadConfig() {
+  for (const p of [
+    path.join(__dirname, '../../..', 'config.json'),
+    path.join(process.cwd(), 'config.json'),
+  ]) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch(_){} }
+  return {};
+}
+const ADMIN_IDS = (loadConfig().ADMINBOT || ['61580139921634']).map(String);
+
+function getDB() {
+  try { return require(path.join(process.cwd(), 'includes', 'data.js')); }
+  catch { return null; }
+}
 
 module.exports.config = {
-    name: "خبرة",
-    version: "1.5.0",
-    hasPermssion: 2, // للمطورين فقط
-    credits: "ayman",
-    description: "تعديل نقاط الخبرة للمستخدمين في المونغو",
-    commandCategory: "admin",
-    usages: "[@tag / id] [المبلغ]",
-    cooldowns: 2
+  name: 'خبرة',
+  version: '3.0.0',
+  hasPermssion: 2,
+  credits: 'ayman',
+  description: 'إضافة XP لمستخدم — للمطور فقط',
+  commandCategory: 'admin',
+  usages: '.خبرة @شخص [المقدار]',
+  cooldowns: 2,
 };
 
-module.exports.run = async function({ api, event, args }) {
-    const { threadID, messageID, mentions } = event;
-    const mongodb = require(path.join(process.cwd(), "includes", "mongodb.js"));
+module.exports.run = async function({ api, event, args, Users }) {
+  const { threadID, messageID, senderID, mentions, type, messageReply } = event;
 
-    try {
-        let targetID, xpToAdd;
+  if (!ADMIN_IDS.includes(String(senderID)))
+    return api.sendMessage('🚫 للمطور فقط.', threadID, messageID);
 
-        // 1. تحديد الشخص (منشن أو UID)
-        if (Object.keys(mentions).length > 0) {
-            targetID = Object.keys(mentions)[0];
-        } else if (args[0] && args[0].length > 10) {
-            targetID = args[0];
-        }
+  const db = getDB();
+  if (!db) return api.sendMessage('❌ data.js مو موجود', threadID, messageID);
 
-        // 2. البحث عن أول رقم في الرسالة لاعتباره هو الـ XP
-        xpToAdd = args.find(arg => !isNaN(arg) && arg.length < 10 && !arg.includes("@"));
-        xpToAdd = parseInt(xpToAdd);
+  // تحديد الهدف
+  const mentionIDs = Object.keys(mentions || {});
+  let targetID;
+  if (mentionIDs.length)                             targetID = mentionIDs[0];
+  else if (type === 'message_reply' && messageReply) targetID = messageReply.senderID;
+  else if (args[0] && args[0].length > 10)           targetID = args[0];
 
-        // 3. التحقق من المدخلات
-        if (!targetID) return api.sendMessage("⚠️ منشن شخصاً أو ضع آيدي الحساب.", threadID, messageID);
-        if (isNaN(xpToAdd)) return api.sendMessage("⚠️ يرجى كتابة الرقم المطلوب.\nمثال: .خبرة @ايمن 1000", threadID, messageID);
+  const xpToAdd = parseInt(args.find(a => !isNaN(a) && a.length < 10));
 
-        // 4. تنفيذ الأمر عبر دالة addExp في المونغو
-        const result = await mongodb.addExp(targetID, xpToAdd);
-        
-        if (!result) return api.sendMessage("❌ عطل: لم يتم العثور على العضو في القاعدة.", threadID, messageID);
+  if (!targetID) return api.sendMessage('⚠️ منشن شخصاً أو ضع ID', threadID, messageID);
+  if (isNaN(xpToAdd)) return api.sendMessage('⚠️ اكتب المقدار\nمثال: .خبرة @أيمن 1000', threadID, messageID);
 
-        // 5. بناء الرسالة النهائية (بسيطة وصافية)
-        let msg = `[ نظام الخبرة ]\n` +
-                  `✅ الإضافة: +${xpToAdd.toLocaleString()} XP\n` +
-                  `📊 المستوى: ${result.level}\n` +
-                  `👑 الرتبة: ${result.rank.emoji} ${result.rank.name}`;
+  const wait = await api.sendMessage('⏳...', threadID);
+  try {
+    const name   = await Users.getNameUser(targetID).catch(() => targetID);
+    await db.ensureUser(targetID, name);
+    const result = await db.addExp(targetID, xpToAdd);
 
-        if (result.isLevelUp) {
-            msg += `\n🆙 لفل أب! مكافأة: +${result.bonusMoney}$`;
-        }
-
-        api.setMessageReaction("⚡", messageID, () => {}, true);
-        return api.sendMessage(msg, threadID, messageID);
-
-    } catch (e) {
-        api.sendMessage(`❌ فشل: ${e.message}`, threadID, messageID);
-    }
+    api.unsendMessage(wait.messageID);
+    return api.sendMessage(
+      `⌬ ━━ 𝗞𝗜𝗥𝗔 ADMIN ━━ ⌬\n\n✅ تمت إضافة XP!\n👤 ${name}\n+${xpToAdd.toLocaleString()} XP\n📊 Level: ${result.level}\n🏅 ${result.rank?.emoji || ''} ${result.rank?.name || ''}${result.levelUp ? '\n🎉 ارتفع ليفل!' : ''}`,
+      threadID, messageID
+    );
+  } catch(e) {
+    api.unsendMessage(wait.messageID);
+    return api.sendMessage(`❌ ${e.message}`, threadID, messageID);
+  }
 };
