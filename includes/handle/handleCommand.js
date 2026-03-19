@@ -44,10 +44,35 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
 
         // ─── فلاتر الحظر والأوضاع ───────────────────────────────
         if (threadBanned.has(threadID) && !ADMINBOT.includes(senderID)) return;
-        if (userBanned.has(senderID) && !ADMINBOT.includes(senderID)) {
-            // 🚫 تفاعل على أوامر المحظورين
-            try { api.setMessageReaction('🚫', messageID, () => {}, true); } catch(_) {}
-            return;
+
+        // ─── فحص الحظر — ذاكرة + GitHub JSON كـ fallback ───────
+        if (!ADMINBOT.includes(senderID)) {
+            let isBanned = userBanned.has(senderID);
+
+            // لو ما لقاه في الذاكرة، نتحقق من data.js مباشرة
+            if (!isBanned) {
+                try {
+                    const dataJS = require(path.join(__dirname, '../../includes/data.js'));
+                    const banRecord = await dataJS.getBan(senderID);
+                    if (banRecord && banRecord.banned) {
+                        // تحقق إن الحظر ما انتهى وقته
+                        if (!banRecord.expiresAt || new Date(banRecord.expiresAt) > new Date()) {
+                            isBanned = true;
+                            // نضيفه للذاكرة عشان المرة الجاية تكون أسرع
+                            global.data.userBanned.set(senderID, {
+                                reason: banRecord.reason || '',
+                                dateAdded: banRecord.bannedAt || '',
+                                expiresAt: banRecord.expiresAt || null
+                            });
+                        }
+                    }
+                } catch(_) {}
+            }
+
+            if (isBanned) {
+                try { api.setMessageReaction('🚫', messageID, () => {}, true); } catch(_) {}
+                return;
+            }
         }
         if (YASSIN === "true" && !ADMINBOT.includes(senderID)) return;
         if (adminOnly && !ADMINBOT.includes(senderID)) return;
