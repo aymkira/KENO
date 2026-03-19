@@ -73,10 +73,18 @@ module.exports.run = async function({ api, event, Users }) {
     await Users.setData(targetID, { data: ud });
   } catch(_) {}
 
-  // رفع من data.js
+  // حذف السجل كاملاً من bans.json
   if (db) {
-    await db.unbanUser(targetID, senderID).catch(() => {});
-    await db.logEvent('unban', { userID: targetID, name: targetName, by: senderID }).catch(() => {});
+    try {
+      const bansData = await db.loadFile(db.FILES.BANS);
+      const id = String(targetID);
+      if (bansData[id]) {
+        delete bansData[id];
+        db._cache[db.FILES.BANS] = { data: bansData, sha: db._cache[db.FILES.BANS]?.sha || null };
+        await db.saveFile(db.FILES.BANS, `delete ban ${id}`);
+      }
+      await db.logEvent('unban', { userID: targetID, name: targetName, by: senderID }).catch(() => {});
+    } catch(_) {}
   }
 
   const time = new Date().toLocaleString('ar-IQ', { timeZone: 'Asia/Baghdad', hour12: false });
