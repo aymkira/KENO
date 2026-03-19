@@ -1,7 +1,7 @@
 const { createCanvas } = require("@napi-rs/canvas");
 const fs = require("fs-extra");
 const path = require("path");
-const { getUserData, addMoney, removeMoney, ensureUser } = require(path.join(process.cwd(), "includes", "mongodb.js"));
+const db = require(path.join(process.cwd(), "includes", "data.js"));
 
 module.exports.config = {
   name: "سلوتس",
@@ -343,9 +343,8 @@ module.exports.run = async function ({ api, event }) {
     return api.sendMessage("🎰 طريقة الاستخدام:\nسلوتس [رهان]\n\nمثال: سلوتس 200\n\nأدنى رهان: 10 $", threadID, messageID);
 
   // ── جلب الرصيد من MongoDB ──
-  await ensureUser(senderID);
-  const userData = await getUserData(senderID);
-  const money = userData?.currency?.money ?? 0;
+  const wallet = await db.getWallet(senderID);
+  const money = wallet.money ?? 0;
 
   if (money < bet)
     return api.sendMessage(`❌ رصيدك غير كافٍ!\nرصيدك: ${money.toLocaleString()} $`, threadID, messageID);
@@ -363,9 +362,9 @@ module.exports.run = async function ({ api, event }) {
 
   // ── تحديث الرصيد في MongoDB ──
   if (totalProfit > 0) {
-    await addMoney(senderID, totalProfit);
+    await db.addMoney(senderID, totalProfit);
   } else if (totalProfit < 0) {
-    await removeMoney(senderID, Math.abs(totalProfit));
+    await db.removeMoney(senderID, Math.abs(totalProfit));
   }
 
   const img = drawSlots(grid, bet, wins, finalMoney, totalProfit);
