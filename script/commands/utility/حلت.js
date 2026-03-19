@@ -1,48 +1,38 @@
-// ╔══════════════════════════════════════════════════════════════════╗
-// ║                   أمر .حلت — فحص KIRA MIND                      ║
-// ║   يتحقق من كل مكونات النظام ويعطي تقرير صحة كامل               ║
-// ╚══════════════════════════════════════════════════════════════════╝
-
 const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
 
 function loadConfig() {
-  const paths = [
+  for (const p of [
     path.join(__dirname, '../../..', 'config.json'),
-    path.join(__dirname, '../../../..', 'config.json'),
     path.join(process.cwd(), 'config.json'),
-  ];
-  for (const p of paths) {
-    try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (_) {}
-  }
+  ]) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch(_){} }
   return {};
 }
-
 const CFG      = loadConfig();
 const GROQ_KEY = CFG.GROQ_API_KEY || '';
-const MONGO_URI = CFG.MONGODB_URI  || '';
-const ADMIN_ID  = '61580139921634';
+const ADMIN_IDS = (CFG.ADMINBOT || ['61580139921634']).map(String);
 
 function getMind() {
-  const tries = [
+  for (const t of [
     () => require('../events/kira_mind'),
-    () => require('../../events/kira_mind'),
     () => require(path.join(process.cwd(), 'script/events/kira_mind')),
-  ];
-  for (const t of tries) {
-    try { return t(); } catch (_) {}
-  }
+  ]) { try { return t(); } catch(_){} }
   return null;
+}
+
+function getDB() {
+  try { return require(path.join(process.cwd(), 'includes', 'data.js')); }
+  catch { return null; }
 }
 
 module.exports.config = {
   name: 'حلت',
-  aliases: ['check', 'status', 'فحص'],
-  version: '1.0.0',
+  aliases: ['check', 'status'],
+  version: '5.0.0',
   hasPermssion: 2,
   credits: 'ayman',
-  description: 'فحص صحة KIRA MIND الكامل',
+  description: 'فحص KIRA MIND',
   commandCategory: 'developer',
   usages: '.حلت',
   cooldowns: 10,
@@ -50,13 +40,13 @@ module.exports.config = {
 
 // ── اختبار Groq ───────────────────────────────────
 function testGroq() {
-  return new Promise((resolve) => {
-    if (!GROQ_KEY) return resolve({ ok: false, msg: 'GROQ_API_KEY غير موجود في config.json', ms: 0 });
+  return new Promise(resolve => {
+    if (!GROQ_KEY) return resolve({ ok: false, ms: 0, msg: 'GROQ_API_KEY مفقود' });
     const start = Date.now();
     const body  = JSON.stringify({
       model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: 'قل "مرحبا" فقط' }],
-      max_tokens: 10,
+      messages: [{ role: 'user', content: 'رد بكلمة واحدة: مرحبا' }],
+      max_tokens: 5,
     });
     const req = https.request({
       hostname: 'api.groq.com',
@@ -69,154 +59,95 @@ function testGroq() {
       },
       timeout: 8000,
     }, res => {
-      let data = '';
-      res.on('data', c => data += c);
+      let d = '';
+      res.on('data', c => d += c);
       res.on('end', () => {
         const ms = Date.now() - start;
         try {
-          const json = JSON.parse(data);
-          if (json.error) return resolve({ ok: false, msg: json.error.message, ms });
-          const reply = json.choices?.[0]?.message?.content || '';
-          resolve({ ok: true, msg: `رد: "${reply.slice(0,20)}"`, ms });
-        } catch {
-          resolve({ ok: false, msg: 'فشل تحليل الرد', ms });
-        }
+          const j = JSON.parse(d);
+          if (j.error) return resolve({ ok: false, ms, msg: j.error.message });
+          resolve({ ok: true, ms, msg: j.choices?.[0]?.message?.content || '✅' });
+        } catch { resolve({ ok: false, ms, msg: 'parse error' }); }
       });
     });
-    req.on('error', e => resolve({ ok: false, msg: e.message, ms: Date.now() - start }));
-    req.on('timeout', () => { req.destroy(); resolve({ ok: false, msg: 'timeout بعد 8 ثواني', ms: 8000 }); });
+    req.on('error', e => resolve({ ok: false, ms: 0, msg: e.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, ms: 8000, msg: 'timeout' }); });
     req.write(body);
     req.end();
   });
 }
 
-// ── اختبار MongoDB ────────────────────────────────
-async function testMongo(mind) {
-  if (!MONGO_URI) return { ok: false, msg: 'MONGODB_URI غير موجود في config.json', ms: 0, docs: 0 };
-  const start = Date.now();
-  try {
-    await mind.connectDB();
-    const UP = mind.getUserProfile();
-    if (!UP) return { ok: false, msg: 'UserProfile model غير موجود', ms: Date.now()-start, docs: 0 };
-    const count = await UP.countDocuments();
-    const ms    = Date.now() - start;
-    return { ok: true, msg: `متصل — ${count} ملف شخصي`, ms, docs: count };
-  } catch (e) {
-    return { ok: false, msg: e.message, ms: Date.now()-start, docs: 0 };
-  }
-}
-
-// ── اختبار ملف kira_mind.js ───────────────────────
-function testMindFile() {
-  const mind = getMind();
-  if (!mind) return { ok: false, msg: 'الملف غير موجود أو فيه خطأ syntax', exports: [] };
-  const required = ['connectDB', 'findUser', 'formatFullReport', 'formatShortReport', 'getUserProfile'];
-  const missing  = required.filter(fn => typeof mind[fn] !== 'function');
-  if (missing.length) return { ok: false, msg: `دوال ناقصة: ${missing.join(', ')}`, exports: Object.keys(mind) };
-  return { ok: true, msg: 'كل الدوال موجودة', exports: Object.keys(mind), mind };
-}
-
-// ── اختبار آخر تحليل ──────────────────────────────
-async function testLastActivity(mind) {
-  try {
-    const UP = mind.getUserProfile();
-    if (!UP) return { ok: false, msg: 'لا يوجد' };
-    const last = await UP.findOne().sort({ lastSeen: -1 });
-    if (!last) return { ok: false, msg: 'لا يوجد ملفات بعد' };
-    const ago  = Math.round((Date.now() - new Date(last.lastSeen)) / 60000);
-    return {
-      ok: true,
-      msg: `آخر تحليل: ${last.name} (منذ ${ago < 60 ? ago+' دقيقة' : Math.round(ago/60)+' ساعة'})`,
-      name: last.name,
-      msgs: last.confidence?.messagesAnalyzed || 0,
-    };
-  } catch (e) {
-    return { ok: false, msg: e.message };
-  }
-}
-
-// ══════════════════════════════════════════════════
-//  RUN
-// ══════════════════════════════════════════════════
-module.exports.run = async ({ api, event }) => {
+module.exports.run = async function({ api, event }) {
   const { threadID, messageID, senderID } = event;
 
-  // أدمن فقط
-  const admins = CFG.ADMINBOT || [ADMIN_ID];
-  if (!admins.includes(senderID))
-    return api.sendMessage('❌ هذا الأمر للمطور فقط.', threadID, messageID);
+  if (!ADMIN_IDS.includes(String(senderID)))
+    return api.sendMessage('🚫 للمطور فقط.', threadID, messageID);
 
-  const wait = await api.sendMessage('🔍 جاري فحص KIRA MIND...', threadID);
+  const wait = await api.sendMessage('🔍 جاري الفحص...', threadID);
 
-  // ── ① فحص ملف kira_mind ──────────────────────
-  const fileCheck = testMindFile();
+  const mind = getMind();
+  const db   = getDB();
 
-  // ── ② فحص Groq ────────────────────────────────
-  const groqCheck = await testGroq();
+  // ① kira_mind.js
+  const mindOk  = !!mind;
+  const mindMsg = mindOk ? '✅ موجود' : '❌ مفقود من script/events/';
 
-  // ── ③ فحص MongoDB ─────────────────────────────
-  let mongoCheck = { ok: false, msg: 'kira_mind.js غير موجود', ms: 0, docs: 0 };
-  let activityCheck = { ok: false, msg: '—' };
-  if (fileCheck.ok && fileCheck.mind) {
-    mongoCheck    = await testMongo(fileCheck.mind);
-    if (mongoCheck.ok) activityCheck = await testLastActivity(fileCheck.mind);
+  // ② Groq
+  const groq = await testGroq();
+
+  // ③ data.js + GitHub
+  let dbOk = false, dbMsg = '', dbCount = 0;
+  if (!db) {
+    dbMsg = '❌ includes/data.js مفقود';
+  } else {
+    try {
+      const start = Date.now();
+      const users = await db.getAllUsers();
+      dbCount = users.length;
+      dbOk  = true;
+      dbMsg = `✅ ${dbCount} مستخدم (${Date.now()-start}ms)`;
+    } catch(e) {
+      dbMsg = `❌ ${e.message}`;
+    }
   }
 
-  // ── ④ فحص config.json ─────────────────────────
-  const configKeys = {
-    GROQ_API_KEY: !!CFG.GROQ_API_KEY,
-    MONGODB_URI:  !!CFG.MONGODB_URI,
-    PREFIX:       !!CFG.PREFIX,
-    ADMINBOT:     !!CFG.ADMINBOT,
-  };
-  const configOk = configKeys.GROQ_API_KEY && configKeys.MONGODB_URI;
+  // ④ config
+  const cfgOk  = !!CFG.GROQ_API_KEY && !!CFG.GITHUB_TOKEN;
+  const cfgMsg = [
+    CFG.GROQ_API_KEY  ? '✅ GROQ'   : '❌ GROQ',
+    CFG.GITHUB_TOKEN  ? '✅ GitHub' : '❌ GitHub',
+    CFG.MONGODB_URI   ? '⚠️ Mongo (غير مستخدم)' : '',
+  ].filter(Boolean).join(' | ');
 
-  // ── ⑤ فحص النظام العام ───────────────────────
-  const nodeVer  = process.version;
-  const uptime   = Math.round(process.uptime() / 60);
-  const memUsed  = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+  // ⑤ آخر نشاط
+  let lastMsg = '—';
+  if (db && dbOk) {
+    try {
+      const users = await db.getAllUsers();
+      const last  = users.sort((a,b) => new Date(b.lastSeen||0) - new Date(a.lastSeen||0))[0];
+      if (last) {
+        const ago = Math.round((Date.now() - new Date(last.lastSeen)) / 60000);
+        lastMsg = `${last.name} — منذ ${ago < 60 ? ago+'د' : Math.round(ago/60)+'س'}`;
+      }
+    } catch(_) {}
+  }
 
-  // ── تجميع النتائج ─────────────────────────────
-  const icon = v => v ? '✅' : '❌';
-  const ms   = v => v > 0 ? ` (${v}ms)` : '';
-
-  const allOk = fileCheck.ok && groqCheck.ok && mongoCheck.ok && configOk;
-  const score = [fileCheck.ok, groqCheck.ok, mongoCheck.ok, configOk].filter(Boolean).length;
+  const score  = [mindOk, groq.ok, dbOk, cfgOk].filter(Boolean).length;
+  const allOk  = score === 4;
+  const icon   = v => v ? '✅' : '❌';
 
   api.unsendMessage(wait.messageID);
   return api.sendMessage(
-`╔═══════════════════════════════╗
-║   🔬 فحص KIRA MIND            ║
-╚═══════════════════════════════╝
-${allOk ? '🟢 كل شيء يعمل بشكل مثالي!' : `🔴 ${4 - score} مشكلة تحتاج حل`}
+`🔬 KIRA MIND — ${allOk ? '🟢 كل شيء يعمل' : `🔴 ${4-score} مشاكل`}
 النتيجة: ${score}/4
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-① ملف kira_mind.js
-   ${icon(fileCheck.ok)} ${fileCheck.msg}
-   ${fileCheck.ok ? `📦 الدوال: ${fileCheck.exports.join(', ')}` : ''}
+① kira_mind.js: ${mindMsg}
+② Groq: ${icon(groq.ok)} ${groq.msg} ${groq.ms ? `(${groq.ms}ms)` : ''}
+③ data.js: ${dbMsg}
+④ config: ${cfgMsg}
+⑤ آخر نشاط: ${lastMsg}
 
-② Groq API${ms(groqCheck.ms)}
-   ${icon(groqCheck.ok)} ${groqCheck.msg}
-   🔑 المفتاح: ${GROQ_KEY ? GROQ_KEY.slice(0,12)+'...' : '❌ غير موجود'}
-
-③ MongoDB${ms(mongoCheck.ms)}
-   ${icon(mongoCheck.ok)} ${mongoCheck.msg}
-   🌐 URI: ${MONGO_URI ? MONGO_URI.split('@')[1]?.split('/')[0] || '✅' : '❌ غير موجود'}
-
-④ config.json
-   ${icon(configOk)} ${Object.entries(configKeys).map(([k,v])=>`${icon(v)} ${k}`).join(' | ')}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⑤ آخر نشاط
-   ${icon(activityCheck.ok)} ${activityCheck.msg}
-   ${activityCheck.ok ? `📊 رسائل محللة: ${activityCheck.msgs}` : ''}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🖥️ البوت:
-   Node.js ${nodeVer} | تشغيل: ${uptime} دقيقة | RAM: ${memUsed} MB
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${!allOk ? `\n💡 حل المشاكل:\n${!fileCheck.ok ? '• تأكد من وجود kira_mind.js في script/events/\n' : ''}${!groqCheck.ok ? '• تحقق من GROQ_API_KEY في config.json\n' : ''}${!mongoCheck.ok ? '• تحقق من MONGODB_URI في config.json\n' : ''}` : ''}🕐 ${new Date().toLocaleString('ar')}`,
+🖥️ Node ${process.version} | RAM: ${Math.round(process.memoryUsage().heapUsed/1024/1024)}MB | ⏱ ${Math.round(process.uptime()/60)}د`,
     threadID, messageID
   );
 };
