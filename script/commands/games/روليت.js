@@ -1,7 +1,7 @@
 const { createCanvas } = require("@napi-rs/canvas");
 const fs = require("fs-extra");
 const path = require("path");
-const { getUserData, addMoney, removeMoney, ensureUser } = require(path.join(process.cwd(), "includes", "mongodb.js"));
+const db = require(path.join(process.cwd(), "includes", "data.js"));
 
 module.exports.config = {
   name: "روليت",
@@ -320,9 +320,8 @@ module.exports.run = async function ({ api, event }) {
     return api.sendMessage("❌ اختيار غير صحيح! استخدم: أحمر، أسود، زوجي، فردي، أو رقم (0-36)", threadID, messageID);
 
   // ── جلب الرصيد من MongoDB ──
-  await ensureUser(senderID);
-  const userData = await getUserData(senderID);
-  const money = userData?.currency?.money ?? 0;
+  const wallet = await db.getWallet(senderID);
+  const money = wallet.money ?? 0;
 
   if (money < bet)
     return api.sendMessage(`❌ رصيدك غير كافٍ!\nرصيدك: ${money.toLocaleString()} $`, threadID, messageID);
@@ -336,10 +335,10 @@ module.exports.run = async function ({ api, event }) {
   // ── تحديث الرصيد في MongoDB ──
   if (multiplier > 0) {
     // فاز — أضف الربح (المبلغ المسترجع = bet * multiplier)
-    await addMoney(senderID, bet * multiplier - bet);
+    await db.addMoney(senderID, bet * multiplier - bet);
   } else {
     // خسر — اشيل الرهان
-    await removeMoney(senderID, bet);
+    await db.removeMoney(senderID, bet);
   }
 
   if (api.setMessageReaction) api.setMessageReaction("🎰", messageID, ()=>{}, true);
