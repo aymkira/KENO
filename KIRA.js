@@ -166,6 +166,29 @@ function onBot({ models: botModel }) {
     }
 
     // ── tryLogin ─────────────────────────────────────────────────
+    // ③ فحص صلاحية الـ cookie
+    async function checkCookieValid() {
+        try {
+            const axios   = require('axios');
+            const cookies = JSON.stringify(appState);
+            const res     = await axios.get('https://mbasic.facebook.com/settings', {
+                headers: {
+                    'cookie':     cookies,
+                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                },
+                timeout: 8000,
+            });
+            const valid = res.data.includes('/notifications.php?') ||
+                          res.data.includes('/privacy/xcs/') ||
+                          res.data.includes('save-password-interstitial');
+            logger(`🍪 Cookie: ${valid ? '✅ صالحة' : '❌ منتهية'}`, '[ SESSION ]');
+            return valid;
+        } catch(e) {
+            logger(`🍪 فحص Cookie فشل: ${e.message}`, '[ SESSION ]');
+            return true; // نفترض صالحة لو فشل الفحص
+        }
+    }
+
     function tryLogin() {
         _loginAttempt++;
         logger(`🔑 محاولة login #${_loginAttempt}`, '[ LOGIN ]');
@@ -175,13 +198,21 @@ function onBot({ models: botModel }) {
                 logger(`❌ Login فشل (${_loginAttempt}): ${JSON.stringify(loginError)}`, '[ LOGIN ]');
                 const delay = Math.min(10000 * _loginAttempt, 60000);
                 logger(`⏳ إعادة بعد ${delay / 1000}s...`, '[ LOGIN ]');
-                return setTimeout(tryLogin, delay);
+                // فحص الـ cookie قبل إعادة المحاولة
+            checkCookieValid().then(valid => {
+                if (!valid) logger('⚠️ الـ Cookie منتهية — قد تحتاج appstate جديد', '[ SESSION ]');
+            }).catch(() => {});
+            return setTimeout(tryLogin, delay);
             }
 
             _loginAttempt = 0;
             logger('✅ تم تسجيل الدخول!', '[ LOGIN ]');
 
-            api.setOptions(global.config.FCAOption);
+            // ① دمج autoReconnect مع FCAOption
+            api.setOptions({
+                ...global.config.FCAOption,
+                autoReconnect: true,
+            });
             writeFileSync(appStateFile, JSON.stringify(api.getAppState(), null, '\x09'));
             global.config.version = '1.2.14';
             global.client.timeStart = Date.now();
@@ -364,6 +395,17 @@ function onBot({ models: botModel }) {
                     logger(`⚠️ فشل حفظ appState: ${e.message}`, '[ SESSION ]');
                 }
             }, 30 * 60 * 1000);
+
+            // ── keep-alive: يحافظ على الـ session حياً كل 15 دقيقة ──
+            setInterval(() => {
+                try {
+                    api.getFriendsList(() => {
+                        logger('💓 keep-alive ✅', '[ SESSION ]');
+                    });
+                } catch(e) {
+                    logger(`💓 keep-alive فشل: ${e.message}`, '[ SESSION ]');
+                }
+            }, 15 * 60 * 1000);
 
             // ── إشعار التشغيل ──────────────────────────────────────
             const momentt = require("moment-timezone").tz("Asia/Baghdad");
