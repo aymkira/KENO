@@ -104,7 +104,8 @@ module.exports.run = async function({ api, event, args }) {
       await db.setUser(id, { name, isTest: true }, false);
 
       // محفظة
-      const { level, rank } = await db.addExp(id, exp);
+      const expResult = await db.addExp(id, exp);
+      const level = expResult?.level || 1;
 
       // حظر عشوائي
       if (banned) await db.banUser(id, rand(FAKE_REASONS), 'TEST_SYSTEM', 0);
