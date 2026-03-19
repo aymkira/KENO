@@ -497,36 +497,22 @@ module.exports.run = async function ({ api, event }) {
     if (type === "message_reply") targetID = messageReply.senderID;
     else if (Object.keys(mentions).length > 0) targetID = Object.keys(mentions)[0];
 
-    let currency = {};
-    let calculated = {};
+    // ── data.js ──────────────────────────────────────
+    const db_inst = getDB();
+    let wallet = {};
+    let userRecord = {};
+    if (db_inst) {
+      wallet     = await db_inst.getWallet(targetID).catch(() => ({}));
+      userRecord = await db_inst.getUser(targetID).catch(() => ({}));
+    }
 
-    try {
-      if (global.db?.allUserData) {
-        const dbUser = global.db.allUserData.find(u => u.userID === targetID);
-        if (dbUser) {
-          currency = dbUser.data || {};
-          const expNeeded = (currency.level || 1) * 100;
-          calculated.progress = Math.min(((currency.exp || 0) % expNeeded) / expNeeded * 100, 100);
-        }
-      }
-      if (!currency.money && !currency.exp) {
-        try {
-          const mongodb = require(path.join(process.cwd(), "includes", "mongodb.js"));
-          const mongoData = await mongodb.getUserData(targetID);
-          if (mongoData?.currency) {
-            currency = mongoData.currency;
-            calculated = mongoData.calculated || {};
-          }
-        } catch (_) {}
-      }
-    } catch (_) {}
-
-    const money    = currency.money   || currency.coin   || currency.coins || 0;
-    const exp      = currency.exp     || currency.xp     || 0;
-    const level    = currency.level   || currency.lv     || 1;
-    const msg      = currency.messageCount || currency.msg || currency.messages || 0;
-    const rank     = currency.rank    || "مبتدئ";
-    const progress = calculated?.progress ?? Math.min(((exp % (level * 100)) / (level * 100)) * 100, 100);
+    const money    = wallet.money   || 0;
+    const exp      = wallet.exp     || 0;
+    const level    = wallet.level   || 1;
+    const rank     = wallet.rank    || "مبتدئ";
+    const msg      = userRecord.totalMessages || 0;
+    const expNeeded = level * 100;
+    const progress = Math.min(((exp % expNeeded) / expNeeded) * 100, 100);
 
     const userInfo = await api.getUserInfo(targetID).catch(() => ({}));
     const username = (userInfo[targetID]?.name || "USER").toUpperCase();
