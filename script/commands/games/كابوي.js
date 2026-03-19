@@ -39,7 +39,7 @@ module.exports.handleReply = async ({ api, event, handleReply }) => {
   if (handleReply.author !== senderID) return;
 
   const header = `⌬ ━━━━━━━━━━━━ ⌬`;
-  const mongodb = require(path.join(process.cwd(), "includes", "mongodb.js"));
+  const db = require(path.join(process.cwd(), "includes", "data.js"));
 
   // المرحلة الأولى: اختيار البقرة
   if (handleReply.step === 1) {
@@ -78,7 +78,7 @@ module.exports.handleReply = async ({ api, event, handleReply }) => {
       const image = (await axios.get(imgUrl, { responseType: "stream" })).data;
 
       if (isWin) {
-        await mongodb.addMoney(senderID, 50);
+        await db.addMoney(senderID, 50);
         return api.sendMessage({
           body: `${header}\n✅ كـفـو! نـجـحـت فـي سـحبـها\n⪼ الـجـائـزة: 50$\n${header}`,
           attachment: image
