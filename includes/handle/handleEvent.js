@@ -26,7 +26,6 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
                     await api.unsendMessage(messageReply.messageID);
                     if (DeveloperMode) logger(`🗑️ حذف رسالة: ${messageReply.messageID}`, "EVENT");
                 } catch (err) {
-                    // إعادة المحاولة بعد ثانية
                     setTimeout(async () => {
                         try { await api.unsendMessage(messageReply.messageID); } catch (_) {}
                     }, 1000);
@@ -47,7 +46,14 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         // ════════════════════════════════════════════════════════════
         // ⚙️ معالجة الأحداث
         // ════════════════════════════════════════════════════════════
-        const currentEventType = event.type || event.logMessageType;
+
+        // ✅ الإصلاح: event.type لما يكون "event" يعني هو log event
+        // فلازم ناخذ logMessageType اللي جوّاه مثل "log:subscribe"
+        // بدل ما ناخذ "event" اللي ما يطابق أي eventType في الملفات
+        const currentEventType = (event.type === "event")
+            ? event.logMessageType
+            : event.type;
+
         let processedEvents = 0;
 
         if (DeveloperMode) {
@@ -55,7 +61,6 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         }
 
         for (const [eventName, eventModule] of events.entries()) {
-            // التحقق من eventType
             if (!eventModule.config?.eventType) {
                 if (DeveloperMode) logger(`⚠️ ${eventName}: مفقود eventType`, "EVENT");
                 continue;
@@ -66,7 +71,6 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
             try {
                 const Obj = { api, event, models, Users, Threads, Currencies };
 
-                // ✅ دعم run و handleEvent معاً
                 if (typeof eventModule.run === "function") {
                     await eventModule.run(Obj);
                 } else if (typeof eventModule.handleEvent === "function") {
