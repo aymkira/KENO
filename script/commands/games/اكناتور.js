@@ -16,7 +16,7 @@ module.exports.config = {
   cooldowns: 3,
 };
 
-const GROQ_API_KEY = "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";
+const GROQ_API_KEY = "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";
 const HEADER      = "⌬ ━━ 🧞 الجـنـي ━━ ⌬";
 const FOOTER      = "⌬ ━━━━━━━━━━━━━━━ ⌬";
 
