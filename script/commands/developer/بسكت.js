@@ -49,11 +49,16 @@ function ghRequest(method, endpoint, body = null) {
   });
 }
 
-// جلب SHA الملف من GitHub (مطلوب للتعديل)
+// جلب SHA الملف من GitHub (مطلوب للحذف والتعديل)
 async function getFileSHA(filePath) {
   try {
-    const res = await ghRequest('GET', `/contents/${filePath}`);
-    if (res.status === 200) return res.data.sha;
+    // تشفير كل جزء من المسار لدعم الأسماء العربية
+    const encodedPath = filePath.split('/').map(p => encodeURIComponent(p)).join('/');
+    const res = await ghRequest('GET', `/contents/${encodedPath}`);
+    if (res.status === 200 && res.data && res.data.sha) return res.data.sha;
+    // محاولة ثانية بالمسار الأصلي
+    const res2 = await ghRequest('GET', `/contents/${filePath}`);
+    if (res2.status === 200 && res2.data && res2.data.sha) return res2.data.sha;
   } catch(_) {}
   return null;
 }
@@ -73,8 +78,15 @@ async function pushToGitHub(filePath, content, message) {
 // حذف ملف من GitHub
 async function deleteFromGitHub(filePath, message) {
   const sha = await getFileSHA(filePath);
-  if (!sha) return { status: 404 };
-  return await ghRequest('DELETE', `/contents/${filePath}`, { message, sha });
+  if (!sha) return { status: 404, data: { message: 'ما أقدر أجيب SHA — الملف مو موجود أو المسار غلط' } };
+  // تشفير المسار للأسماء العربية
+  const encodedPath = filePath.split('/').map(p => encodeURIComponent(p)).join('/');
+  const res = await ghRequest('DELETE', `/contents/${encodedPath}`, { message, sha });
+  // إذا فشل بالمسار المشفر جرب العادي
+  if (res.status !== 200) {
+    return await ghRequest('DELETE', `/contents/${filePath}`, { message, sha });
+  }
+  return res;
 }
 
 // جلب محتوى ملف من GitHub
@@ -283,11 +295,12 @@ module.exports.run = async function({ api, event, args }) {
 
       // حذف من GitHub
       const res       = await deleteFromGitHub(filePath, `🗑️ حذف ${path.basename(filePath)} — KIRA Bot`);
-      const ghStatus  = (res.status === 200) ? '✅' : res.status === 404 ? '⚠️ ما موجود' : `❌ (${res.status})`;
+      const ghOk      = res.status === 200;
+      const ghStatus  = ghOk ? '✅ حُذف' : res.status === 404 ? '⚠️ ما موجود على GitHub' : `❌ (${res.status}) ${res.data?.message||''}`;
 
       api.unsendMessage(wait.messageID);
       return api.sendMessage(
-        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n🗑️ تم الحذف!\n\n📄 ${filePath}\n💾 محلي: ${localStatus}\n🐙 GitHub: ${ghStatus}`,
+        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n${ghOk?'🗑️ تم الحذف!':'⚠️ حُذف محلياً فقط!'}\n\n📄 ${filePath}\n💾 محلي: ${localStatus}\n🐙 GitHub: ${ghStatus}`,
         threadID, messageID
       );
     } catch (e) {
