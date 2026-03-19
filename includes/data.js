@@ -140,11 +140,12 @@ function rankName(level) {
 // ═══════════════════════════════════════════════════════
 //  ① users.json — بيانات المستخدمين الأساسية
 // ═══════════════════════════════════════════════════════
-const USERS_FILE   = 'user/users.json';
-const WALLET_FILE  = 'user/wallet.json';
-const BANS_FILE    = 'user/bans.json';
-const HISTORY_FILE = 'user/history.json';
-const THREADS_FILE = 'group/threads.json';
+const USERS_FILE    = 'user/users.json';
+const WALLET_FILE   = 'user/wallet.json';
+const BANS_FILE     = 'user/bans.json';
+const HISTORY_FILE  = 'user/history.json';
+const THREADS_FILE  = 'group/threads.json';
+const ANALYSIS_FILE = 'user/analysis.json';
 
 // جلب مستخدم
 async function getUser(userID) {
@@ -201,6 +202,9 @@ async function incrementMessages(userID, name = '') {
   if (name && !db[id].name) db[id].name = name;
   _cache[USERS_FILE].data = db;
   _dirty.add(USERS_FILE);
+
+  // ── XP تلقائي — نقطة لكل رسالة ──────────────────
+  try { await addExp(userID, 1); } catch(_) {}
   // لا نحفظ كل رسالة — الحفظ التلقائي كل 5 دقائق
   return db[id];
 }
@@ -388,6 +392,29 @@ async function unbanThread(threadID) {
   return entry;
 }
 
+// ═══════════════════════════════════════════════════════
+//  ⑥ analysis.json — تحليل الشخصيات
+// ═══════════════════════════════════════════════════════
+async function getAnalysis(userID) {
+  const db = await loadFile(ANALYSIS_FILE);
+  return db[String(userID)] || null;
+}
+
+async function setAnalysis(userID, data) {
+  const db = await loadFile(ANALYSIS_FILE);
+  const id = String(userID);
+  db[id] = { ...(db[id] || { userID: id, createdAt: now() }), ...data, updatedAt: now() };
+  _cache[ANALYSIS_FILE].data = db;
+  _dirty.add(ANALYSIS_FILE);
+  await saveFile(ANALYSIS_FILE, `analysis ${id}`);
+  return db[id];
+}
+
+async function getAllAnalysis() {
+  const db = await loadFile(ANALYSIS_FILE);
+  return Object.values(db);
+}
+
 // ══════════════════════════════════════════════════
 //  إدارة الملفات
 // ══════════════════════════════════════════════════
@@ -480,6 +507,9 @@ module.exports = {
   flushAll, reload, stats,
   loadFile, saveFile,
 
+  // ── تحليل ──
+  getAnalysis, setAnalysis, getAllAnalysis,
+
   // ── ثوابت ──
-  FILES: { USERS: USERS_FILE, WALLET: WALLET_FILE, BANS: BANS_FILE, HISTORY: HISTORY_FILE, THREADS: THREADS_FILE },
+  FILES: { USERS: USERS_FILE, WALLET: WALLET_FILE, BANS: BANS_FILE, HISTORY: HISTORY_FILE, THREADS: THREADS_FILE, ANALYSIS: ANALYSIS_FILE },
 };
