@@ -18,9 +18,8 @@
     "BOTNAME": "𝐤𝐢𝐫𝐚",
     "PREFIX": ".",
     "ADMINBOT": [
-        "61580139921634",
-        "61584059280197",
-        "100034144836882"
+        "61580139921634"
+        
     ],
     "MODEL_API_KEY": "al-3_TKYAQrBNjO_EWrbSMenJqXAH5-jnAa61lesclZSjQ",
     "iconUnsend": {
@@ -267,5 +266,7 @@
         "delayUnsend": 30
     },
     "GROQ_API_KEY": "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",
-    "MONGODB_URI": "mongodb+srv://kkayman200_db_user:ukhzlLzjRxQgSnTl@cluster0.7nsuoil.mongodb.net/KiraDB?retryWrites=true&w=majority"
+    "MONGODB_URI": "mongodb+srv://kkayman200_db_user:ukhzlLzjRxQgSnTl@cluster0.7nsuoil.mongodb.net/KiraDB?retryWrites=true&w=majority",
+    "GITHUB_TOKEN": "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",
+    "GITHUB_REPO": "aymkira/KENO"
 }
