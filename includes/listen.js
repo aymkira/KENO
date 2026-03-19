@@ -51,6 +51,29 @@ module.exports = function({ api, models }) {
         }
         for (const dataC of currencies) global.data.allCurrenciesID.push(String(dataC['userID']));
         logger.loader(global.getText('listen', 'loadedEnvironmentUser')), logger(global.getText('listen','successLoadEnvironment'),'[ DATABASE ]');
+
+        // ── تحميل البانات من GitHub JSON (data.js) ──────────────
+        try {
+          const dataJS = require('./data.js');
+          const bansDB = await dataJS.loadFile(dataJS.FILES.BANS);
+          for (const [id, ban] of Object.entries(bansDB)) {
+            if (ban.banned) {
+              // تحقق إن الحظر ما انتهى
+              if (ban.expiresAt && new Date(ban.expiresAt) < new Date()) continue;
+              global.data.userBanned.set(String(id), {
+                reason: ban.reason || '',
+                dateAdded: ban.bannedAt || '',
+                expiresAt: ban.expiresAt || null,
+                bannedBy: ban.bannedBy || ''
+              });
+            }
+          }
+          logger.loader(`[DATA.JS] ✅ تم تحميل ${global.data.userBanned.size} حظر من GitHub JSON`);
+        } catch(e) {
+          logger.loader(`[DATA.JS] ⚠️ فشل تحميل البانات: ${e.message}`, 'warn');
+        }
+        // ────────────────────────────────────────────────────────
+
     } catch (error) {
         return logger.loader(global.getText('listen', 'failLoadEnvironment', error), 'error');
     }
