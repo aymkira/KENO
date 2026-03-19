@@ -1,11 +1,11 @@
 const dns = require('dns').promises;
 
 module.exports.config = {
-  name: 'dns', aliases: ['nslookup', 'domain'],
+  name: 'دنس', aliases: ['nslookup', 'domain'],
   version: '1.0', credits: 'ayman',
   commandCategory: 'utility',
   description: 'معلومات DNS لأي دومين',
-  usage: '.dns [الدومين]', cooldown: 5,
+  usage: '.دنس [الدومين]', cooldown: 5,
   };
 
 module.exports.run = async ({ api, event, args }) => {
@@ -17,7 +17,7 @@ module.exports.run = async ({ api, event, args }) => {
 ║   🌐 بحث DNS      ║
 ╚═══════════════════╝
 
-📝 الاستخدام: .dns [الدومين]
+📝 الاستخدام: .دنس [الدومين]
 
 أمثلة:
   • .dns google.com
