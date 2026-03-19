@@ -1,4 +1,3 @@
-
 const fs   = require("fs-extra");
 const axios = require("axios");
 const path  = require("path");
@@ -105,7 +104,7 @@ module.exports.handleEvent = async function({ api, event }) {
 
     await api.sendMessage(
       {
-        body: `${HEADER}\n\n📥 ${platform}\n✅ تم التحميل`,
+        body: `${HEADER}\n\n📥 ${platform}\n✅ تم التنزيل من تلجرام`,
         attachment: fs.createReadStream(filePath)
       },
       threadID,
