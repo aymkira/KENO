@@ -8,44 +8,22 @@ function loadConfig() {
   ]) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch(_){} }
   return {};
 }
-
 const CFG       = loadConfig();
-const ADMIN_IDS = (CFG.ADMINBOT || []).map(String);
-const MONGO_URI = CFG.MONGODB_URI || '';
+const ADMIN_IDS = (CFG.ADMINBOT || ['61580139921634']).map(String);
 
-const mongoose = require('mongoose');
-let BanLog, mongoReady = false;
-async function initMongo() {
-  if (mongoReady || !MONGO_URI) return;
-  try {
-    if (mongoose.connection.readyState === 0) await mongoose.connect(MONGO_URI);
-    const s = new mongoose.Schema({
-      type:String, targetID:String, bannedBy:String,
-      bannedByName:String, threadID:String,
-      reason:String, action:String,
-      date:{ type:Date, default:Date.now }
-    });
-    BanLog = mongoose.models.BanLog || mongoose.model('BanLog', s);
-    mongoReady = true;
-  } catch(_) {}
-}
-async function logDB(d) {
-  try { await initMongo(); if (BanLog) await BanLog.create(d); } catch(_) {}
+function getDB() {
+  try { return require(path.join(process.cwd(), 'includes', 'data.js')); }
+  catch { return null; }
 }
 
-function getTime() {
-  return new Date().toLocaleString('ar-IQ', { timeZone:'Asia/Baghdad', hour12:false });
-}
-
-// ══════════════════════════════════════════════════
 module.exports.config = {
   name: 'اولبان',
-  version: '4.0.0',
+  version: '5.0.0',
   hasPermssion: 2,
   credits: 'ayman',
   description: 'حظر/فتح المجموعة كاملة — للمطور فقط',
   commandCategory: 'admin',
-  usages: '.اولبان [سبب] ← يحظر\n.اولبان مجدداً ← يرفع',
+  usages: '.اولبان [سبب] ← حظر\n.اولبان مجدداً ← فتح',
   cooldowns: 3,
 };
 
@@ -53,24 +31,28 @@ module.exports.run = async function({ api, event, Users, Threads }) {
   const { threadID, messageID, senderID, body } = event;
 
   if (!ADMIN_IDS.includes(String(senderID)))
-    return api.sendMessage('⌬ ━━ 𝗞𝗜𝗥𝗔 ADMIN ━━ ⌬\n\n🚫 للمطور فقط.', threadID, messageID);
+    return api.sendMessage('🚫 للمطور فقط.', threadID, messageID);
 
-  const getName   = async id => { try { return await Users.getNameUser(id); } catch(_) { return id; } };
+  const db        = getDB();
+  const getName   = async id => { try { return await Users.getNameUser(id); } catch { return id; } };
   const adminName = await getName(senderID);
-  const time      = getTime();
   const after     = (body || '').includes('|') ? body.split('|')[1]?.trim() : '';
   const reason    = after || 'لا يوجد سبب';
-  const isBanned  = global.data.threadBanned?.has(threadID);
+  const time      = new Date().toLocaleString('ar-IQ', { timeZone: 'Asia/Baghdad', hour12: false });
+  const isBanned  = global.data?.threadBanned?.has(threadID);
 
   if (isBanned) {
     // رفع الحظر
     global.data.threadBanned?.delete(threadID);
+
     try {
       const td = (await Threads.getData(threadID))?.data || {};
-      td.banned=false; td.reason=''; td.dateAdded='';
+      td.banned = false; td.reason = ''; td.dateAdded = '';
       await Threads.setData(threadID, { data: td });
     } catch(_) {}
-    await logDB({ type:'thread', targetID:threadID, bannedBy:senderID, bannedByName:adminName, threadID, action:'unban' });
+
+    if (db) await db.unbanThread(threadID).catch(() => {});
+
     return api.sendMessage(
       `⌬ ━━ 𝗞𝗜𝗥𝗔 ADMIN ━━ ⌬\n\n✅ تم فتح المجموعة!\n👮 ${adminName}\n🕐 ${time}`,
       threadID, messageID
@@ -78,15 +60,18 @@ module.exports.run = async function({ api, event, Users, Threads }) {
   }
 
   // حظر المجموعة
-  global.data.threadBanned?.set(threadID, { reason, dateAdded: time });
+  global.data?.threadBanned?.set(threadID, { reason, dateAdded: time });
+
   try {
     const td = (await Threads.getData(threadID))?.data || {};
-    td.banned=true; td.reason=reason; td.dateAdded=time;
+    td.banned = true; td.reason = reason; td.dateAdded = time;
     await Threads.setData(threadID, { data: td });
   } catch(_) {}
-  await logDB({ type:'thread', targetID:threadID, bannedBy:senderID, bannedByName:adminName, threadID, reason, action:'allban' });
+
+  if (db) await db.banThread(threadID, reason, senderID).catch(() => {});
+
   return api.sendMessage(
-    `⌬ ━━ 𝗞𝗜𝗥𝗔 ADMIN ━━ ⌬\n\n🔴 تم حظر المجموعة!\n\n📋 السبب: ${reason}\n👮 ${adminName}\n🕐 ${time}\n\n⚠️ .اولبان مجدداً لرفع الحظر`,
+    `⌬ ━━ 𝗞𝗜𝗥𝗔 ADMIN ━━ ⌬\n\n🔴 تم حظر المجموعة!\n📋 ${reason}\n👮 ${adminName}\n🕐 ${time}\n\n⚠️ .اولبان مجدداً لرفع الحظر`,
     threadID, messageID
   );
 };
