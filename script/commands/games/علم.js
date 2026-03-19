@@ -19,7 +19,7 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
   const { threadID, messageID, senderID, body } = event;
   if (senderID !== handleReply.author) return;
 
-  const mongodb = require(path.join(process.cwd(), "includes", "mongodb.js"));
+  const db = require(path.join(process.cwd(), "includes", "data.js"));
   const userAnswer = body.trim();
   const correctAnswer = handleReply.correctAnswer;
 
@@ -28,7 +28,7 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
 
   if (userAnswer === correctAnswer) {
       const moneyGain = 50; 
-      await mongodb.addMoney(senderID, moneyGain);
+      await db.addMoney(senderID, moneyGain);
 
       return api.sendMessage(`${header}\n\n✅ أحسنت! الإجابة صحيحة.\n⪼ الجائزة: ${moneyGain}$`, threadID, (err, info) => {
           setTimeout(() => api.unsendMessage(info.messageID), 5000);
