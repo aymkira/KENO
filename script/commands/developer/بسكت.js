@@ -2,9 +2,6 @@ const fs   = require('fs-extra');
 const path = require('path');
 const http = require('https');
 
-// ══════════════════════════════════════════════════
-//  الإعدادات
-// ══════════════════════════════════════════════════
 function loadConfig() {
   for (const p of [
     path.join(__dirname, '../../..', 'config.json'),
@@ -14,8 +11,8 @@ function loadConfig() {
 }
 const CFG       = loadConfig();
 const ADMIN_IDS = (CFG.ADMINBOT || []).map(String);
-const GH_TOKEN  = CFG.GITHUB_TOKEN  || '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';
-const GH_REPO   = CFG.GITHUB_REPO   || 'aymkira/KENO';
+const GH_TOKEN  = CFG.GITHUB_TOKEN || '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';
+const GH_REPO   = CFG.GITHUB_REPO  || 'aymkira/KENO';
 const ROOT      = process.cwd();
 
 // ══════════════════════════════════════════════════
@@ -49,66 +46,84 @@ function ghRequest(method, endpoint, body = null) {
   });
 }
 
-// جلب SHA الملف من GitHub (مطلوب للحذف والتعديل)
 async function getFileSHA(filePath) {
   try {
-    // تشفير كل جزء من المسار لدعم الأسماء العربية
-    const encodedPath = filePath.split('/').map(p => encodeURIComponent(p)).join('/');
-    const res = await ghRequest('GET', `/contents/${encodedPath}`);
-    if (res.status === 200 && res.data && res.data.sha) return res.data.sha;
-    // محاولة ثانية بالمسار الأصلي
-    const res2 = await ghRequest('GET', `/contents/${filePath}`);
-    if (res2.status === 200 && res2.data && res2.data.sha) return res2.data.sha;
+    const enc = filePath.split('/').map(p => encodeURIComponent(p)).join('/');
+    const res = await ghRequest('GET', `/contents/${enc}`);
+    if (res.status === 200 && res.data?.sha) return res.data.sha;
   } catch(_) {}
   return null;
 }
 
-// رفع أو تعديل ملف على GitHub
 async function pushToGitHub(filePath, content, message) {
-  const sha      = await getFileSHA(filePath);
-  const encoded  = Buffer.from(content).toString('base64');
-  const body     = {
-    message,
-    content: encoded,
-    ...(sha ? { sha } : {}),
-  };
-  return await ghRequest('PUT', `/contents/${filePath}`, body);
+  const sha     = await getFileSHA(filePath);
+  const enc     = filePath.split('/').map(p => encodeURIComponent(p)).join('/');
+  const body    = { message, content: Buffer.from(content).toString('base64'), ...(sha ? { sha } : {}) };
+  return await ghRequest('PUT', `/contents/${enc}`, body);
 }
 
-// حذف ملف من GitHub
 async function deleteFromGitHub(filePath, message) {
   const sha = await getFileSHA(filePath);
-  if (!sha) return { status: 404, data: { message: 'ما أقدر أجيب SHA — الملف مو موجود أو المسار غلط' } };
-  // تشفير المسار للأسماء العربية
-  const encodedPath = filePath.split('/').map(p => encodeURIComponent(p)).join('/');
-  const res = await ghRequest('DELETE', `/contents/${encodedPath}`, { message, sha });
-  // إذا فشل بالمسار المشفر جرب العادي
-  if (res.status !== 200) {
-    return await ghRequest('DELETE', `/contents/${filePath}`, { message, sha });
-  }
-  return res;
+  if (!sha) return { status: 404, data: { message: 'ملف مو موجود على GitHub' } };
+  const enc = filePath.split('/').map(p => encodeURIComponent(p)).join('/');
+  return await ghRequest('DELETE', `/contents/${enc}`, { message, sha });
 }
 
-// جلب محتوى ملف من GitHub
 async function getFromGitHub(filePath) {
-  const res = await ghRequest('GET', `/contents/${filePath}`);
-  if (res.status === 200 && res.data.content) {
+  const enc = filePath.split('/').map(p => encodeURIComponent(p)).join('/');
+  const res = await ghRequest('GET', `/contents/${enc}`);
+  if (res.status === 200 && res.data?.content)
     return Buffer.from(res.data.content, 'base64').toString('utf8');
-  }
   return null;
 }
 
 // ══════════════════════════════════════════════════
 //  مساعدات
 // ══════════════════════════════════════════════════
-function safePath(filePath) {
-  const clean = filePath.trim().replace(/\.\.\//g, '').replace(/^\//, '');
-  return clean;
+function safePath(p) { return p.trim().replace(/\.\.\//g, '').replace(/^\//, ''); }
+function getSize(c)  { const b = Buffer.byteLength(c,'utf8'); return b < 1024 ? `${b}B` : `${(b/1024).toFixed(1)}KB`; }
+
+// خريطة الفئات → المجلدات
+const CATEGORY_MAP = {
+  games: 'script/commands/games',
+  utility: 'script/commands/utility',
+  admin: 'script/commands/admin',
+  developer: 'script/commands/developer',
+  media: 'script/commands/media',
+  fun: 'script/commands/fun',
+  pic: 'script/commands/pic',
+  telegram: 'script/commands/telegram',
+  'الخدمات': 'script/commands/utility',
+  'خدمات': 'script/commands/utility',
+};
+
+// استخراج name و commandCategory من الكود
+function extractMeta(code) {
+  const name = (code.match(/name\s*:\s*['"]([^'"]+)['"]/) || [])[1] || null;
+  const cat  = (code.match(/commandCategory\s*:\s*['"]([^'"]+)['"]/) || [])[1]?.toLowerCase() || null;
+  return { name, category: cat };
 }
 
-function getSize(content) {
-  const bytes = Buffer.byteLength(content, 'utf8');
-  return bytes < 1024 ? `${bytes}B` : `${(bytes/1024).toFixed(1)}KB`;
+// تحديد مسار الملف من الاسم والفئة
+function resolveCmdPath(name, category) {
+  const dir = CATEGORY_MAP[category] || 'script/commands/utility';
+  return `${dir}/${name}.js`;
+}
+
+// بحث عن ملف الأمر بالاسم في كل المجلدات
+function findCmdFile(name) {
+  const base = path.join(ROOT, 'script/commands');
+  function walk(dir) {
+    try {
+      for (const item of fs.readdirSync(dir)) {
+        const full = path.join(dir, item);
+        if (fs.statSync(full).isDirectory()) { const f = walk(full); if (f) return f; }
+        else if (item === `${name}.js`) return full;
+      }
+    } catch(_) {}
+    return null;
+  }
+  return walk(base);
 }
 
 // ══════════════════════════════════════════════════
@@ -116,21 +131,24 @@ function getSize(content) {
 // ══════════════════════════════════════════════════
 module.exports.config = {
   name: 'بسكت',
-  version: '1.0.0',
+  version: '2.0.0',
   hasPermssion: 2,
   credits: 'ayman',
-  description: 'تعديل ملفات البوت وحفظها على GitHub — للمطور فقط',
+  description: 'تعديل ملفات البوت وحفظها على GitHub',
   commandCategory: 'developer',
-  usages: `.بسكت قرأ [مسار]           ← عرض محتوى الملف
-.بسكت كتب [مسار] | [محتوى] ← كتابة وحفظ على GitHub
-.بسكت حذف [مسار]            ← حذف من البوت وGitHub
-.بسكت سحب [مسار]            ← تحميل من GitHub للبوت
+  usages:
+`.بسكت ارفع [كود]            ← رفع أمر جديد تلقائياً
+.بسكت عدل [اسم] | [كود]    ← تعديل أمر موجود
+.بسكت حذف [اسم أو مسار]    ← حذف أمر
+.بسكت قرأ [مسار]            ← عرض + تعديل بالرد
+.بسكت كتب [مسار] | [محتوى] ← كتابة بالمسار
+.بسكت سحب [مسار]            ← تحميل من GitHub
 .بسكت قائمة [مجلد]           ← عرض الملفات`,
   cooldowns: 5,
 };
 
 // ══════════════════════════════════════════════════
-//  handleReply — لتعديل محتوى الملف
+//  handleReply — تعديل بعد قرأ
 // ══════════════════════════════════════════════════
 module.exports.handleReply = async function({ api, event, handleReply }) {
   const { threadID, messageID, senderID, body } = event;
@@ -138,35 +156,19 @@ module.exports.handleReply = async function({ api, event, handleReply }) {
   if (handleReply.action !== 'edit') return;
 
   const filePath = handleReply.filePath;
-  const content  = body;
   const wait     = await api.sendMessage('⏳ جاري الحفظ...', threadID);
-
   try {
-    // حفظ على البوت محلياً
     const fullPath = path.resolve(ROOT, filePath);
     fs.ensureDirSync(path.dirname(fullPath));
-    fs.writeFileSync(fullPath, content, 'utf8');
-
-    // رفع على GitHub
-    const res = await pushToGitHub(
-      filePath, content,
-      `✏️ تعديل ${path.basename(filePath)} — KIRA Bot`
-    );
-
+    fs.writeFileSync(fullPath, body, 'utf8');
+    const res = await pushToGitHub(filePath, body, `✏️ تعديل ${path.basename(filePath)} — KIRA`);
     api.unsendMessage(wait.messageID);
-
-    if (res.status === 200 || res.status === 201) {
-      return api.sendMessage(
-        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n✅ تم الحفظ!\n\n📄 ${filePath}\n💾 ${getSize(content)}\n🐙 GitHub: ✅ محدّث`,
-        threadID, messageID
-      );
-    } else {
-      return api.sendMessage(
-        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n⚠️ حُفظ محلياً لكن GitHub فشل!\n\n❌ ${res.data?.message || res.status}`,
-        threadID, messageID
-      );
-    }
-  } catch (e) {
+    const gh = (res.status === 200 || res.status === 201) ? '✅' : `❌ (${res.status})`;
+    return api.sendMessage(
+      `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n✅ تم الحفظ!\n📄 ${filePath}\n💾 ${getSize(body)}\n🐙 GitHub: ${gh}`,
+      threadID, messageID
+    );
+  } catch(e) {
     api.unsendMessage(wait.messageID);
     return api.sendMessage(`❌ خطأ: ${e.message}`, threadID, messageID);
   }
@@ -184,12 +186,123 @@ module.exports.run = async function({ api, event, args }) {
   const sub = args[0]?.toLowerCase();
 
   // ════════════════════════════════════════
+  //  .بسكت ارفع [كود]
+  //  يقرأ name و commandCategory من الكود
+  //  ويحفظ في المجلد الصح تلقائياً
+  // ════════════════════════════════════════
+  if (sub === 'ارفع') {
+    // الكود = كل شيء بعد "ارفع "
+    const afterCmd = body.indexOf('ارفع');
+    const code     = afterCmd !== -1 ? body.slice(afterCmd + 'ارفع'.length).trim() : '';
+
+    if (!code) return api.sendMessage('📝 الاستخدام:\n.بسكت ارفع [الكود كاملاً]', threadID, messageID);
+
+    const meta = extractMeta(code);
+    if (!meta.name) return api.sendMessage('❌ ما أقدر أقرأ name من الكود\nتأكد إن الكود يحتوي على:\nname: "اسم"', threadID, messageID);
+
+    const filePath = resolveCmdPath(meta.name, meta.category);
+    const fullPath = path.resolve(ROOT, filePath);
+    const wait     = await api.sendMessage(`⏳ جاري رفع الأمر "${meta.name}"...`, threadID);
+
+    try {
+      fs.ensureDirSync(path.dirname(fullPath));
+      fs.writeFileSync(fullPath, code, 'utf8');
+      const res = await pushToGitHub(filePath, code, `➕ إضافة أمر ${meta.name} — KIRA`);
+      api.unsendMessage(wait.messageID);
+      const gh = (res.status === 200 || res.status === 201) ? '✅' : `❌ (${res.status})`;
+      return api.sendMessage(
+        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n✅ تم رفع الأمر!\n\n📄 ${filePath}\n🏷️ الفئة: ${meta.category || 'utility'}\n💾 ${getSize(code)}\n🐙 GitHub: ${gh}`,
+        threadID, messageID
+      );
+    } catch(e) {
+      api.unsendMessage(wait.messageID);
+      return api.sendMessage(`❌ خطأ: ${e.message}`, threadID, messageID);
+    }
+  }
+
+  // ════════════════════════════════════════
+  //  .بسكت عدل [اسم الأمر] | [كود جديد]
+  //  يلاقي الملف بالاسم ويستبدل محتواه
+  // ════════════════════════════════════════
+  if (sub === 'عدل') {
+    const parts = body.split('|');
+    if (parts.length < 2) return api.sendMessage(
+      '📝 الاستخدام:\n.بسكت عدل [اسم الأمر] | [الكود الجديد]',
+      threadID, messageID
+    );
+
+    const afterCmd = parts[0].indexOf('عدل');
+    const cmdName  = afterCmd !== -1 ? parts[0].slice(afterCmd + 'عدل'.length).trim() : '';
+    const newCode  = parts.slice(1).join('|').trim();
+
+    if (!cmdName) return api.sendMessage('❌ اكتب اسم الأمر', threadID, messageID);
+    if (!newCode)  return api.sendMessage('❌ الكود فارغ', threadID, messageID);
+
+    const fullPath = findCmdFile(cmdName);
+    if (!fullPath) return api.sendMessage(`❌ ما لقيت ملف الأمر "${cmdName}"`, threadID, messageID);
+
+    const filePath = path.relative(ROOT, fullPath).replace(/\\/g, '/');
+    const wait     = await api.sendMessage(`⏳ جاري تعديل "${cmdName}"...`, threadID);
+
+    try {
+      fs.writeFileSync(fullPath, newCode, 'utf8');
+      const res = await pushToGitHub(filePath, newCode, `✏️ تعديل أمر ${cmdName} — KIRA`);
+      api.unsendMessage(wait.messageID);
+      const gh = (res.status === 200 || res.status === 201) ? '✅' : `❌ (${res.status})`;
+      return api.sendMessage(
+        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n✏️ تم التعديل!\n\n📄 ${filePath}\n💾 ${getSize(newCode)}\n🐙 GitHub: ${gh}`,
+        threadID, messageID
+      );
+    } catch(e) {
+      api.unsendMessage(wait.messageID);
+      return api.sendMessage(`❌ خطأ: ${e.message}`, threadID, messageID);
+    }
+  }
+
+  // ════════════════════════════════════════
+  //  .بسكت حذف [اسم الأمر أو مسار]
+  //  يلاقي الملف بالاسم ويحذفه
+  // ════════════════════════════════════════
+  if (sub === 'حذف') {
+    const target = args.slice(1).join(' ').trim();
+    if (!target) return api.sendMessage('📝 اكتب اسم الأمر أو المسار', threadID, messageID);
+
+    // هل هو مسار أم اسم أمر؟
+    const isFilePath = target.includes('/') || target.endsWith('.js');
+    const fullPath   = isFilePath
+      ? path.resolve(ROOT, safePath(target))
+      : findCmdFile(target);
+
+    if (!fullPath) return api.sendMessage(`❌ ما لقيت "${target}"`, threadID, messageID);
+
+    const filePath = path.relative(ROOT, fullPath).replace(/\\/g, '/');
+    const wait     = await api.sendMessage(`⏳ جاري حذف "${target}"...`, threadID);
+
+    try {
+      let localStatus = '✅';
+      try { fs.removeSync(fullPath); } catch(_) { localStatus = '⚠️ ما موجود محلياً'; }
+
+      const res      = await deleteFromGitHub(filePath, `🗑️ حذف أمر ${target} — KIRA`);
+      const ghOk     = res.status === 200;
+      const ghStatus = ghOk ? '✅ حُذف' : res.status === 404 ? '⚠️ ما موجود على GitHub' : `❌ (${res.status})`;
+
+      api.unsendMessage(wait.messageID);
+      return api.sendMessage(
+        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n🗑️ تم الحذف!\n\n📄 ${filePath}\n💾 محلي: ${localStatus}\n🐙 GitHub: ${ghStatus}`,
+        threadID, messageID
+      );
+    } catch(e) {
+      api.unsendMessage(wait.messageID);
+      return api.sendMessage(`❌ خطأ: ${e.message}`, threadID, messageID);
+    }
+  }
+
+  // ════════════════════════════════════════
   //  .بسكت قائمة [مجلد]
   // ════════════════════════════════════════
-  if (sub === 'قائمة' || sub === 'ls') {
+  if (sub === 'قائمة') {
     const dir     = args[1] || 'script/commands';
     const fullDir = path.resolve(ROOT, dir);
-
     try {
       const items = fs.readdirSync(fullDir);
       const list  = items.map(item => {
@@ -197,12 +310,11 @@ module.exports.run = async function({ api, event, args }) {
         const stat = fs.statSync(full);
         return `${stat.isDirectory() ? '📁' : '📄'} ${item}`;
       }).join('\n');
-
       return api.sendMessage(
         `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n📂 ${dir}\n━━━━━━━━━━━━━━\n${list || 'فارغ'}`,
         threadID, messageID
       );
-    } catch (e) {
+    } catch(e) {
       return api.sendMessage(`❌ ما أقدر أقرأ المجلد: ${e.message}`, threadID, messageID);
     }
   }
@@ -210,31 +322,26 @@ module.exports.run = async function({ api, event, args }) {
   // ════════════════════════════════════════
   //  .بسكت قرأ [مسار]
   // ════════════════════════════════════════
-  if (sub === 'قرأ' || sub === 'read') {
+  if (sub === 'قرأ') {
     const filePath = safePath(args.slice(1).join(' '));
     if (!filePath) return api.sendMessage('📝 اكتب مسار الملف', threadID, messageID);
 
     const fullPath = path.resolve(ROOT, filePath);
     try {
       const content = fs.readFileSync(fullPath, 'utf8');
-      const preview = content.length > 2000
-        ? content.slice(0, 2000) + '\n\n... [مقطوع — الملف كبير]'
-        : content;
-
+      const preview = content.length > 2000 ? content.slice(0, 2000) + '\n\n... [مقطوع]' : content;
       const sent = await api.sendMessage(
         `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n📄 ${filePath}\n💾 ${getSize(content)}\n━━━━━━━━━━━━━━\n${preview}\n━━━━━━━━━━━━━━\n✏️ رد على هذه الرسالة بالمحتوى الجديد للتعديل`,
         threadID, messageID
       );
-
       global.client?.handleReply?.push({
-        name:      module.exports.config.name,
+        name: module.exports.config.name,
         messageID: sent.messageID,
-        author:    senderID,
-        action:    'edit',
+        author: senderID,
+        action: 'edit',
         filePath,
       });
-
-    } catch (e) {
+    } catch(e) {
       return api.sendMessage(`❌ ما أقدر أقرأ الملف: ${e.message}`, threadID, messageID);
     }
     return;
@@ -243,67 +350,26 @@ module.exports.run = async function({ api, event, args }) {
   // ════════════════════════════════════════
   //  .بسكت كتب [مسار] | [محتوى]
   // ════════════════════════════════════════
-  if (sub === 'كتب' || sub === 'write') {
-    const rest  = (body || '').split('|');
-    if (rest.length < 2) return api.sendMessage(
-      '📝 الاستخدام:\n.بسكت كتب [مسار] | [المحتوى]',
-      threadID, messageID
-    );
-
-    const filePath = safePath(rest[0].replace(/^\.بسكت\s+كتب\s+/i, '').trim());
-    const content  = rest.slice(1).join('|').trim();
-
+  if (sub === 'كتب') {
+    const parts = body.split('|');
+    if (parts.length < 2) return api.sendMessage('📝 الاستخدام:\n.بسكت كتب [مسار] | [المحتوى]', threadID, messageID);
+    const filePath = safePath(parts[0].replace(/^\.بسكت\s+كتب\s+/i, '').trim());
+    const content  = parts.slice(1).join('|').trim();
     if (!filePath || !content) return api.sendMessage('❌ مسار أو محتوى فارغ', threadID, messageID);
 
-    const wait = await api.sendMessage('⏳ جاري الكتابة والرفع...', threadID);
-
+    const wait = await api.sendMessage('⏳ جاري الكتابة...', threadID);
     try {
-      // حفظ محلي
       const fullPath = path.resolve(ROOT, filePath);
       fs.ensureDirSync(path.dirname(fullPath));
       fs.writeFileSync(fullPath, content, 'utf8');
-
-      // GitHub
-      const res = await pushToGitHub(filePath, content, `✏️ ${path.basename(filePath)} — KIRA Bot`);
+      const res = await pushToGitHub(filePath, content, `✏️ ${path.basename(filePath)} — KIRA`);
       api.unsendMessage(wait.messageID);
-
-      const ghStatus = (res.status === 200 || res.status === 201) ? '✅' : `❌ (${res.status})`;
+      const gh = (res.status === 200 || res.status === 201) ? '✅' : `❌ (${res.status})`;
       return api.sendMessage(
-        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n✅ تم الكتابة!\n\n📄 ${filePath}\n💾 ${getSize(content)}\n🐙 GitHub: ${ghStatus}`,
+        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n✅ تم الكتابة!\n📄 ${filePath}\n💾 ${getSize(content)}\n🐙 GitHub: ${gh}`,
         threadID, messageID
       );
-    } catch (e) {
-      api.unsendMessage(wait.messageID);
-      return api.sendMessage(`❌ خطأ: ${e.message}`, threadID, messageID);
-    }
-  }
-
-  // ════════════════════════════════════════
-  //  .بسكت حذف [مسار]
-  // ════════════════════════════════════════
-  if (sub === 'حذف' || sub === 'delete') {
-    const filePath = safePath(args.slice(1).join(' '));
-    if (!filePath) return api.sendMessage('📝 اكتب مسار الملف للحذف', threadID, messageID);
-
-    const wait = await api.sendMessage(`⏳ جاري حذف ${filePath}...`, threadID);
-
-    try {
-      // حذف محلي
-      const fullPath = path.resolve(ROOT, filePath);
-      let localStatus = '✅';
-      try { fs.removeSync(fullPath); } catch(_) { localStatus = '⚠️ ما موجود محلياً'; }
-
-      // حذف من GitHub
-      const res       = await deleteFromGitHub(filePath, `🗑️ حذف ${path.basename(filePath)} — KIRA Bot`);
-      const ghOk      = res.status === 200;
-      const ghStatus  = ghOk ? '✅ حُذف' : res.status === 404 ? '⚠️ ما موجود على GitHub' : `❌ (${res.status}) ${res.data?.message||''}`;
-
-      api.unsendMessage(wait.messageID);
-      return api.sendMessage(
-        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n${ghOk?'🗑️ تم الحذف!':'⚠️ حُذف محلياً فقط!'}\n\n📄 ${filePath}\n💾 محلي: ${localStatus}\n🐙 GitHub: ${ghStatus}`,
-        threadID, messageID
-      );
-    } catch (e) {
+    } catch(e) {
       api.unsendMessage(wait.messageID);
       return api.sendMessage(`❌ خطأ: ${e.message}`, threadID, messageID);
     }
@@ -312,29 +378,22 @@ module.exports.run = async function({ api, event, args }) {
   // ════════════════════════════════════════
   //  .بسكت سحب [مسار]
   // ════════════════════════════════════════
-  if (sub === 'سحب' || sub === 'pull') {
+  if (sub === 'سحب') {
     const filePath = safePath(args.slice(1).join(' '));
-    if (!filePath) return api.sendMessage('📝 اكتب مسار الملف للسحب من GitHub', threadID, messageID);
-
-    const wait = await api.sendMessage(`⏳ جاري السحب من GitHub...`, threadID);
-
+    if (!filePath) return api.sendMessage('📝 اكتب مسار الملف', threadID, messageID);
+    const wait = await api.sendMessage('⏳ جاري السحب من GitHub...', threadID);
     try {
       const content = await getFromGitHub(filePath);
-      if (!content) {
-        api.unsendMessage(wait.messageID);
-        return api.sendMessage(`❌ الملف ما موجود على GitHub: ${filePath}`, threadID, messageID);
-      }
-
+      if (!content) { api.unsendMessage(wait.messageID); return api.sendMessage(`❌ الملف ما موجود على GitHub`, threadID, messageID); }
       const fullPath = path.resolve(ROOT, filePath);
       fs.ensureDirSync(path.dirname(fullPath));
       fs.writeFileSync(fullPath, content, 'utf8');
-
       api.unsendMessage(wait.messageID);
       return api.sendMessage(
-        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n⬇️ تم السحب!\n\n📄 ${filePath}\n💾 ${getSize(content)}\n✅ محفوظ على البوت`,
+        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n⬇️ تم السحب!\n📄 ${filePath}\n💾 ${getSize(content)}\n✅ محفوظ محلياً`,
         threadID, messageID
       );
-    } catch (e) {
+    } catch(e) {
       api.unsendMessage(wait.messageID);
       return api.sendMessage(`❌ خطأ: ${e.message}`, threadID, messageID);
     }
@@ -344,13 +403,15 @@ module.exports.run = async function({ api, event, args }) {
   //  مساعدة
   // ════════════════════════════════════════
   return api.sendMessage(
-    `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n📁 أمر بسكت — تعديل ملفات البوت\n\n` +
-    `.بسكت قرأ [مسار]           ← عرض الملف + تعديل بالرد\n` +
-    `.بسكت كتب [مسار] | [محتوى] ← كتابة مباشرة\n` +
-    `.بسكت حذف [مسار]            ← حذف من البوت وGitHub\n` +
+    `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩 ━━ ⌬\n\n📁 أمر بسكت\n\n` +
+    `.بسكت ارفع [كود]            ← رفع أمر جديد تلقائياً\n` +
+    `.بسكت عدل [اسم] | [كود]    ← تعديل أمر موجود\n` +
+    `.بسكت حذف [اسم أو مسار]    ← حذف أمر\n` +
+    `.بسكت قرأ [مسار]            ← عرض + تعديل بالرد\n` +
+    `.بسكت كتب [مسار] | [محتوى] ← كتابة بالمسار\n` +
     `.بسكت سحب [مسار]            ← تحميل من GitHub\n` +
     `.بسكت قائمة [مجلد]           ← عرض الملفات\n\n` +
-    `مثال:\n.بسكت قرأ script/commands/utility/كيرا.js`,
+    `مثال:\n.بسكت ارفع [كود أمر]\n.بسكت عدل كيرا | [الكود الجديد]\n.بسكت حذف كيرا`,
     threadID, messageID
   );
 };
