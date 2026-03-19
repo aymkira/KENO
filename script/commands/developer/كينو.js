@@ -3,12 +3,32 @@
 //   2000+ دالة — يفهم العربي — ينفذ أي أمر
 //   by Ayman
 // ══════════════════════════════════════════════════════════════
-const axios    = require("axios");
-const path     = require("path");
-const mongoose = require("mongoose");
-const { getUserData, addMoney, removeMoney, ensureUser, updateUserData, getAllUsers } = require(
-  path.join(process.cwd(), "includes", "mongodb.js")
-);
+const axios = require("axios");
+const path  = require("path");
+const db    = require(path.join(process.cwd(), "includes", "data.js"));
+
+// wrappers تحاكي واجهة mongodb القديمة
+async function ensureUser(uid)           { return db.ensureWallet(uid); }
+async function getWalletData(uid)        { return db.getWallet(uid); }
+async function addMoney(uid, amt)        { return db.addMoney(uid, amt); }
+async function removeMoney(uid, amt)     { return db.removeMoney(uid, amt); }
+async function addExp(uid, amt)          { return db.addExp(uid, amt); }
+async function getAllUsers()             {
+  const data = await db.loadFile(db.FILES.WALLET);
+  return Object.values(data);
+}
+async function getUserData(uid) {
+  const w = await db.getWallet(uid);
+  return { currency: w };
+}
+async function updateUserData(uid, data) {
+  const dbFile = await db.loadFile(db.FILES.WALLET);
+  const id = String(uid);
+  if (!dbFile[id]) await db.ensureWallet(uid);
+  Object.assign(dbFile[id], data, { updatedAt: new Date().toISOString() });
+  db._cache[db.FILES.WALLET] = { data: dbFile, sha: db._cache[db.FILES.WALLET]?.sha || null };
+  return db.saveFile(db.FILES.WALLET, "updateUserData " + id);
+}
 
 module.exports.config = {
   name: "كينو",
@@ -25,19 +45,11 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY || "gsk_4X4q4wNgCGddaEsd5T6oWGdyb3
 const GROQ_MODEL   = "llama-3.3-70b-versatile";
 
 // ══════════════════════════════════════════
-//   MONGODB SCHEMA
+//   نظام الأوامر الديناميكية — GitHub JSON
 // ══════════════════════════════════════════
-const dynamicCmdSchema = new mongoose.Schema({
-  name:      { type: String, required: true, unique: true },
-  code:      { type: String, required: true },
-  prompt:    { type: String, default: "" },
-  category:  { type: String, default: "عام" },
-  usageCount:{ type: Number, default: 0 },
-  createdBy: { type: String, default: "" },
-  createdAt: { type: Date,   default: Date.now },
-  updatedAt: { type: Date,   default: Date.now }
-});
-const DynamicCmd = mongoose.models.DynamicCmd || mongoose.model("DynamicCmd", dynamicCmdSchema);
+const CMDS_FILE = "group/dynamic_cmds.json";
+async function _getCmds() { return db.loadFile(CMDS_FILE); }
+async function _saveCmds() { return db.saveFile(CMDS_FILE, "update dynamic cmds"); }
 
 // ══════════════════════════════════════════════════════════════════════════════════
 //   KNOWLEDGE BASE ULTRA — 2000+ دالة وأمر
@@ -1542,16 +1554,24 @@ async function safeEval(code, ctx) {
 }
 
 // ══════════════════════════════════════════
-//   DB HELPERS
+//   DB HELPERS — GitHub JSON
 // ══════════════════════════════════════════
-const saveCmd   = (name, code, prompt, cat, by) =>
-  DynamicCmd.findOneAndUpdate({ name }, { code, prompt, category: cat||"عام", createdBy: by, updatedAt: new Date() }, { upsert:true, new:true });
-
-const loadCmd   = name  => DynamicCmd.findOne({ name });
-const listCmds  = ()    => DynamicCmd.find({}, "name prompt category usageCount createdAt").sort({ usageCount:-1 });
-const deleteCmd = name  => DynamicCmd.deleteOne({ name });
-const deleteAll = ()    => DynamicCmd.deleteMany({});
-const incUsage  = name  => DynamicCmd.updateOne({ name }, { $inc: { usageCount:1 } });
+const saveCmd = async (name, code, prompt, cat, by) => {
+  const cmds = await _getCmds();
+  cmds[name] = { name, code, prompt: prompt||"", category: cat||"عام", createdBy: by||"",
+    usageCount: cmds[name]?.usageCount || 0,
+    createdAt: cmds[name]?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString() };
+  if (!db._cache[CMDS_FILE]) db._cache[CMDS_FILE] = { data: cmds, sha: null };
+  else db._cache[CMDS_FILE].data = cmds;
+  await _saveCmds();
+  return cmds[name];
+};
+const loadCmd   = async (name) => { const c = await _getCmds(); return c[name] || null; };
+const listCmds  = async ()     => { const c = await _getCmds(); return Object.values(c).sort((a,b)=>(b.usageCount||0)-(a.usageCount||0)); };
+const deleteCmd = async (name) => { const c = await _getCmds(); if(!c[name]) return {deletedCount:0}; delete c[name]; if(db._cache[CMDS_FILE]) db._cache[CMDS_FILE].data=c; await _saveCmds(); return {deletedCount:1}; };
+const deleteAll = async ()     => { const c = await _getCmds(); const n=Object.keys(c).length; if(db._cache[CMDS_FILE]) db._cache[CMDS_FILE].data={}; await _saveCmds(); return {deletedCount:n}; };
+const incUsage  = async (name) => { const c = await _getCmds(); if(c[name]){c[name].usageCount=(c[name].usageCount||0)+1; if(db._cache[CMDS_FILE]) db._cache[CMDS_FILE].data=c;} };
 
 // ══════════════════════════════════════════
 //   FORMAT COMMANDS LIST
