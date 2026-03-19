@@ -1,4 +1,5 @@
 const path = require("path");
+
 module.exports.config = {
     name: "اسرق",
     version: "1.1.0",
@@ -12,25 +13,27 @@ module.exports.config = {
 
 module.exports.run = async function({ api, event }) {
     const { threadID, messageID, senderID, mentions } = event;
-    const mongodb = require(path.join(process.cwd(), "includes", "mongodb.js"));
+    const db = require(path.join(process.cwd(), "includes", "data.js"));
     const header = `⌬ ━━━━━━━━━━━━ ⌬\n      عملية سرقة\n⌬ ━━━━━━━━━━━━ ⌬`;
 
-    if (Object.keys(mentions).length == 0) return api.sendMessage(`${header}\n\n⚠️ يجب منشن الضحية للسرقة!`, threadID, messageID);
-    
-    const victimID = Object.keys(mentions)[0];
-    const success = Math.random() > 0.7;
+    if (Object.keys(mentions).length == 0)
+        return api.sendMessage(`${header}\n\n⚠️ يجب منشن الضحية للسرقة!`, threadID, messageID);
 
-    const victimData = await mongodb.getUserData(victimID);
-    if (!victimData || victimData.currency.money < 200) return api.sendMessage(`${header}\n\n❌ الضحية طفرانة، ابحث عن غيرها!`, threadID, messageID);
+    const victimID = Object.keys(mentions)[0];
+    const victimWallet = await db.getWallet(victimID);
+    if (!victimWallet || victimWallet.money < 200)
+        return api.sendMessage(`${header}\n\n❌ الضحية طفرانة، ابحث عن غيرها!`, threadID, messageID);
+
+    const success = Math.random() > 0.7;
 
     if (success) {
         const amount = Math.floor(Math.random() * 200) + 100;
-        await mongodb.removeMoney(victimID, amount);
-        await mongodb.addMoney(senderID, amount);
+        await db.removeMoney(victimID, amount);
+        await db.addMoney(senderID, amount);
         return api.sendMessage(`${header}\n\n🥷 نجحت العملية!\n💰 سرقت مبلغ: ${amount}$`, threadID, messageID);
     } else {
         const fine = 150;
-        await mongodb.removeMoney(senderID, fine);
+        await db.removeMoney(senderID, fine);
         return api.sendMessage(`${header}\n\n🚓 كبسة! فشلت العملية.\n💸 تم تغريمك: ${fine}$`, threadID, messageID);
     }
 };
