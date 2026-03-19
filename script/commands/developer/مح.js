@@ -13,14 +13,28 @@ const ADMIN_IDS = (CFG.ADMINBOT || ["61580139921634"]).map(String);
 
 module.exports.config = {
   name: "مح",
-  version: "1.0.0",
+  version: "2.0.0",
   hasPermssion: 2,
   credits: "ayman",
   description: "طرد — يقبل منشن / رد / ID / تفاعل 🐢",
   commandCategory: "admin",
-  usages: ".مح @شخص | رد | ID\nأو تفاعل على مسج بـ 🐢",
+  usages: ".مح @شخص | رد على مسج | ID\nأو تفاعل على مسج بـ 🐢",
   cooldowns: 0,
 };
+
+// ══════════════════════════════════════════
+//  دالة الطرد المشتركة
+// ══════════════════════════════════════════
+async function kick(api, targetID, threadID, messageID) {
+  if (ADMIN_IDS.includes(String(targetID))) return;
+  if (String(targetID) === String(api.getCurrentUserID())) return;
+  try {
+    await api.removeUserFromGroup(targetID, threadID);
+    api.setMessageReaction("✅", messageID, () => {}, true);
+  } catch(e) {
+    console.error("[مح]", e.message);
+  }
+}
 
 // ══════════════════════════════════════════
 //  أمر عادي — منشن / رد / ID
@@ -33,14 +47,9 @@ module.exports.run = async function({ api, event }) {
 
   let targetID = null;
 
-  // منشن
   const mentionIDs = Object.keys(mentions || {});
-  if (mentionIDs.length) targetID = mentionIDs[0];
-
-  // رد على مسج
-  else if (messageReply?.senderID) targetID = messageReply.senderID;
-
-  // ID مكتوب في النص
+  if (mentionIDs.length)              targetID = mentionIDs[0];
+  else if (messageReply?.senderID)    targetID = messageReply.senderID;
   else {
     const m = (body || "").match(/\b(\d{10,})\b/);
     if (m) targetID = m[1];
@@ -49,42 +58,24 @@ module.exports.run = async function({ api, event }) {
   if (!targetID)
     return api.sendMessage("❌ منشن شخص أو رد على مسجه أو اكتب الـ ID", threadID, messageID);
 
-  if (ADMIN_IDS.includes(String(targetID)))
-    return api.sendMessage("🛡️ ما تقدر تطرد المطور!", threadID, messageID);
-
-  if (String(targetID) === String(api.getCurrentUserID()))
-    return api.sendMessage("😅 ما أقدر أطرد نفسي!", threadID, messageID);
-
-  try {
-    await api.removeUserFromGroup(targetID, threadID);
-    api.setMessageReaction("✅", messageID, () => {}, true);
-  } catch(e) {
-    api.sendMessage(`❌ فشل الطرد: ${e.message}`, threadID, messageID);
-  }
+  await kick(api, targetID, threadID, messageID);
 };
 
 // ══════════════════════════════════════════
-//  تفاعل 🐢 = طرد فوري
+//  handleEvent — يستمع لكل تفاعل 🐢
 // ══════════════════════════════════════════
-module.exports.handleReaction = async function({ api, event }) {
+module.exports.handleEvent = async function({ api, event }) {
+  // نستمع فقط لأحداث التفاعل
+  if (event.type !== "message_reaction") return;
+
   const { threadID, messageID, senderID, reaction, userID } = event;
 
-  // فقط المطور يقدر يستخدم هذا
+  // فقط المطور
   if (!ADMIN_IDS.includes(String(senderID))) return;
 
-  // فقط تفاعل 🐢
+  // فقط 🐢
   if (reaction !== "🐢") return;
 
-  // الشخص اللي أرسل المسج الأصلي
-  const targetID = String(userID);
-
-  if (ADMIN_IDS.includes(targetID)) return;
-  if (targetID === String(api.getCurrentUserID())) return;
-
-  try {
-    await api.removeUserFromGroup(targetID, threadID);
-    api.setMessageReaction("✅", messageID, () => {}, true);
-  } catch(e) {
-    console.error("[مح]", e.message);
-  }
+  // userID = صاحب الرسالة اللي تفاعلنا عليها
+  await kick(api, String(userID), threadID, messageID);
 };
