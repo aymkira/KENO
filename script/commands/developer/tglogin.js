@@ -6,7 +6,7 @@
 const { TelegramClient } = require("telegram");
 const { StringSession }  = require("telegram/sessions");
 const { Logger }         = require("telegram/extensions");
-const mongoose           = require("mongoose");
+const db = require(path.join(process.cwd(), "includes", "data.js"));
 const path               = require("path");
 
 Logger.setLevel("none");
@@ -22,36 +22,27 @@ module.exports.config = {
   cooldowns: 5
 };
 
-// ══ Schema لحفظ الـ session في MongoDB ══
-const tgSessionSchema = new mongoose.Schema({
-  key:     { type: String, default: "main" },
-  session: { type: String, default: "" },
-  phone:   { type: String, default: "" },
-  savedAt: { type: Date,   default: Date.now }
-});
-const TgSession = mongoose.models.TgSession ||
-  mongoose.model("TgSession", tgSessionSchema);
+// ══ ملف session في GitHub JSON ══
+const TG_SESSION_FILE = "group/tg_session.json";
 
 const TG_CONFIG = {
   apiId:   38886989,
   apiHash: "d29c090337bce1e1015c766493edab71"
 };
 
-// ── قراءة الـ session من MongoDB ──
+// ── قراءة الـ session ──
 async function getSession() {
   try {
-    const doc = await TgSession.findOne({ key: "main" });
-    return doc?.session || "";
+    const data = await db.readCustomFile(TG_SESSION_FILE);
+    return data?.session || "";
   } catch(e) { return ""; }
 }
 
-// ── حفظ الـ session في MongoDB ──
+// ── حفظ الـ session ──
 async function saveSession(sessionStr, phone) {
-  await TgSession.findOneAndUpdate(
-    { key: "main" },
-    { session: sessionStr, phone, savedAt: new Date() },
-    { upsert: true }
-  );
+  await db.writeCustomFile(TG_SESSION_FILE, {
+    session: sessionStr, phone, savedAt: new Date().toISOString()
+  }, "save tg session");
 }
 
 // ── Singleton client ──
@@ -85,12 +76,12 @@ module.exports.run = async function({ api, event, args }) {
 
   // بدون input — عرض الحالة
   if (!input) {
-    const doc = await TgSession.findOne({ key: "main" });
+    const doc = await db.readCustomFile(TG_SESSION_FILE).catch(() => null);
     if (doc?.session) {
       return api.sendMessage(
         "✅ تيليجرام مسجل ومحفوظ في MongoDB!\n\n" +
         "📱 الحساب: " + (doc.phone || "غير معروف") + "\n" +
-        "📅 تاريخ التسجيل: " + doc.savedAt.toLocaleDateString("ar") + "\n\n" +
+        "📅 تاريخ التسجيل: " + (doc.savedAt || "غير معروف") + "\n\n" +
         "• tglogin test — اختبار الاتصال\n" +
         "• tglogin reset — إعادة التسجيل",
         threadID, messageID
@@ -106,7 +97,7 @@ module.exports.run = async function({ api, event, args }) {
 
   // reset
   if (input === "reset") {
-    await TgSession.deleteMany({ key: "main" });
+    await db.writeCustomFile(TG_SESSION_FILE, {}, "reset tg session");
     tgClient = null;
     global.tgLoginState[senderID] = null;
     return api.sendMessage("🔄 تم مسح الـ session\nأعد التسجيل: tglogin +964XXXXXXXXXX", threadID, messageID);
