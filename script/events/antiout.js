@@ -4,47 +4,57 @@ const axios = require("axios");
 module.exports.config = {
   name: "تحكم_الجروب",
   eventType: ["log:subscribe", "log:unsubscribe"],
-  version: "5.0",
-  credits: "ChatGPT",
-  description: "ترحيب واضافة وطرد ورجوع تلقائي برسائل فخمة وصور"
+  version: "6.0",
+  credits: "KIRA",
+  description: "ترحيب ووداع بـ GIF"
 };
 
 module.exports.run = async ({ api, event, Users, Threads }) => {
   const threadID = event.threadID;
 
-  // جلب بيانات الجروب
   const threadInfo = await api.getThreadInfo(threadID);
   const groupName = threadInfo.threadName || "الجروب";
 
-  // ============ عند الإضافة ==============
+  // ============ عند الانضمام ==============
   if (event.logMessageType === "log:subscribe") {
     const addedIDs = event.logMessageData.addedParticipants;
 
     for (const user of addedIDs) {
       const userID = user.userFbId;
 
+      // البوت نفسه انضاف — تجاهل
+      if (userID === api.getCurrentUserID()) continue;
+
       const name =
         global.data.userName.get(userID) ||
         (await Users.getNameUser(userID));
 
-      // جلب صورة بروفايل العضو
-      const avatarURL = `https://graph.facebook.com/${userID}/picture?width=800&height=800`;
+      // GIF الترحيب — أنيمي كيوت
+      const gifURL = "https://media.giphy.com/media/10N247rib4BlVC/giphy.gif";
+      const gifPath = __dirname + `/welcome_${userID}.gif`;
 
-      const imgPath = __dirname + `/welcome_${userID}.png`;
-      const imgData = (await axios.get(avatarURL, { responseType: "arraybuffer" })).data;
-      fs.writeFileSync(imgPath, Buffer.from(imgData, "utf-8"));
+      try {
+        const gifData = (await axios.get(gifURL, { responseType: "arraybuffer" })).data;
+        fs.writeFileSync(gifPath, Buffer.from(gifData));
 
-      api.sendMessage(
-        {
-          body:
-            `🌟 أهلاً وسهلاً يا ${name} 🌟\n` +
-            `نورت جروب **${groupName}** 🤍✨\n\n` +
-            `خلي الجروب يشوف حضورك يا جميل 😎🔥`,
-          attachment: fs.createReadStream(imgPath)
-        },
-        threadID,
-        () => fs.unlinkSync(imgPath) // حذف الصورة بعد الإرسال
-      );
+        api.sendMessage(
+          {
+            body:
+              `✨ نورت يا ${name}! ✨\n` +
+              `أهلاً وسهلاً في ${groupName} 🤍\n\n` +
+              `اتبع القوانين ولا تشاغب 😇`,
+            attachment: fs.createReadStream(gifPath)
+          },
+          threadID,
+          () => { try { fs.unlinkSync(gifPath); } catch (_) {} }
+        );
+      } catch (err) {
+        // لو فشل تحميل الـ GIF نرسل رسالة بدونه
+        api.sendMessage(
+          `✨ نورت يا ${name}!\nأهلاً في ${groupName} — اتبع القوانين ولا تشاغب 😇`,
+          threadID
+        );
+      }
     }
 
     return;
@@ -57,40 +67,35 @@ module.exports.run = async ({ api, event, Users, Threads }) => {
       global.data.userName.get(leftUser) ||
       (await Users.getNameUser(leftUser));
 
-    // طلع لوحده
-    if (event.author == leftUser) {
-      api.addUserToGroup(leftUser, threadID, async (err) => {
-        if (err) {
-          return api.sendMessage(`🚪 ${name} غادر...`, threadID);
-        }
+    // GIF الوداع — Tony Awards
+    const gifURL = "https://media.giphy.com/media/KRxcgvd5fLiWk/giphy.gif";
+    const gifPath = __dirname + `/bye_${leftUser}.gif`;
 
-        // بعد إرجاعه، نرسل له رسالة فخمة
-        api.sendMessage(
-          `✨ تعال يا حلو 😘\nلا تهرب مرّة ثانية!`,
-          threadID
-        );
-      });
+    // رسائل مستفزة عشوائية
+    const msgs = [
+      `${name} راح 🚶‍♂️.. والله ما نشتاقلك 😂`,
+      `باي باي يا ${name} 👋 ما راح يفرق معنا فراقك 💅`,
+      `${name} طلع وكأنه ما كان موجود أصلاً 😴`,
+      `وداعاً يا ${name}.. الجروب ما حس بفرق 🙃`,
+      `${name} مشى.. الهواء صاف الحين 😌✨`
+    ];
+    const msg = msgs[Math.floor(Math.random() * msgs.length)];
 
-      return;
-    }
-
-    // تم طرده
-    else {
-      // صورة مضحكة – حط صورتك بدل الرابط لو تبغى
-      const funnyImg = "https://i.ibb.co/7NRn0Tcn/d98f24daea4c.gif";
-
-      const imgPath = __dirname + `/kick_${leftUser}.jpg`;
-      const imgData = (await axios.get(funnyImg, { responseType: "arraybuffer" })).data;
-      fs.writeFileSync(imgPath, Buffer.from(imgData, "utf-8"));
+    try {
+      const gifData = (await axios.get(gifURL, { responseType: "arraybuffer" })).data;
+      fs.writeFileSync(gifPath, Buffer.from(gifData));
 
       api.sendMessage(
         {
-          body: `🚫 لا أحب نباح الكلاب 🐶!\nتم التخلص من ${name} بنجاح 😂🔥`,
-          attachment: fs.createReadStream(imgPath)
+          body: msg,
+          attachment: fs.createReadStream(gifPath)
         },
         threadID,
-        () => fs.unlinkSync(imgPath)
+        () => { try { fs.unlinkSync(gifPath); } catch (_) {} }
       );
+    } catch (err) {
+      // لو فشل تحميل الـ GIF نرسل الرسالة بدونه
+      api.sendMessage(msg, threadID);
     }
   }
 };
