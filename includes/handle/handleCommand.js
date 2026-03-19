@@ -43,36 +43,31 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         var command = commands.get(commandName);
 
         // ─── فلاتر الحظر والأوضاع ───────────────────────────────
-        if (threadBanned.has(threadID) && !ADMINBOT.includes(senderID)) return;
-
-        // ─── فحص الحظر — ذاكرة + GitHub JSON كـ fallback ───────
         if (!ADMINBOT.includes(senderID)) {
-            let isBanned = userBanned.has(senderID);
+            let isThreadBanned = threadBanned.has(threadID);
 
-            // لو ما لقاه في الذاكرة، نتحقق من data.js مباشرة
-            if (!isBanned) {
+            // fallback — تحقق من data.js لو ما لقاه في الذاكرة
+            if (!isThreadBanned) {
                 try {
                     const dataJS = require(path.join(__dirname, '../../includes/data.js'));
-                    const banRecord = await dataJS.getBan(senderID);
-                    if (banRecord && banRecord.banned) {
-                        // تحقق إن الحظر ما انتهى وقته
-                        if (!banRecord.expiresAt || new Date(banRecord.expiresAt) > new Date()) {
-                            isBanned = true;
-                            // نضيفه للذاكرة عشان المرة الجاية تكون أسرع
-                            global.data.userBanned.set(senderID, {
-                                reason: banRecord.reason || '',
-                                dateAdded: banRecord.bannedAt || '',
-                                expiresAt: banRecord.expiresAt || null
-                            });
-                        }
+                    const threadRecord = await dataJS.loadFile('group/threads.json');
+                    const tr = threadRecord[String(threadID)];
+                    if (tr?.banned) {
+                        isThreadBanned = true;
+                        global.data.threadBanned.set(threadID, {
+                            reason: tr.banReason || tr.reason || '',
+                            dateAdded: tr.bannedAt || ''
+                        });
                     }
                 } catch(_) {}
             }
 
-            if (isBanned) {
-                try { api.setMessageReaction('🚫', messageID, () => {}, true); } catch(_) {}
-                return;
-            }
+            if (isThreadBanned) return;
+        }
+        if (userBanned.has(senderID) && !ADMINBOT.includes(senderID)) {
+            // 🚫 تفاعل على أوامر المحظورين
+            try { api.setMessageReaction('🚫', messageID, () => {}, true); } catch(_) {}
+            return;
         }
         if (YASSIN === "true" && !ADMINBOT.includes(senderID)) return;
         if (adminOnly && !ADMINBOT.includes(senderID)) return;
