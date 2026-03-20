@@ -1,7 +1,7 @@
 module.exports.config = {
   name:        "antijoin",
   eventType:   ["log:subscribe"],
-  version:     "2.0.0",
+  version:     "2.1.0",
   credits:     "ayman",
   description: "منع إضافة أعضاء جدد للمجموعة",
 };
@@ -11,51 +11,47 @@ module.exports.run = async function({ event, api, Threads, Users }) {
   const botID    = String(api.getCurrentUserID());
   const ADMINBOT = (global.config?.ADMINBOT || []).map(String);
 
-  // لو البوت نفسه أُضيف — تجاهل
-  if (logMessageData.addedParticipants?.some(i => String(i.userFbId) === botID)) return;
+  // لو البوت أُضيف — تجاهل
+  const added = logMessageData.addedParticipants || [];
+  if (added.some(i => String(i.userFbId) === botID)) return;
+  if (!added.length) return;
 
-  // جيب إعدادات الكروب
-  let data = {};
+  // جيب إعدادات الكروب من الذاكرة أولاً
+  let antiJoin = false;
   try {
-    const td = await Threads.getData(threadID);
-    data = td?.data || {};
+    const cached = global.data?.threadData?.get(String(threadID));
+    antiJoin = cached?.antiJoin === true;
+    if (!antiJoin) {
+      const td = await Threads.getData(threadID);
+      antiJoin = td?.data?.antiJoin === true;
+    }
   } catch(_) {}
 
-  // الحماية مفعلة فقط لو antiJoin == true
-  if (!data.antiJoin) return;
+  if (!antiJoin) return;
 
-  const added       = logMessageData.addedParticipants || [];
-  const adderID     = String(logMessageData.addedBy || added[0]?.userFbId || "");
-  const adderIsAdmin = ADMINBOT.includes(adderID);
+  // المطور أضاف — اسمح
+  const adderID = String(added[0]?.addedBy || logMessageData.addedBy || "");
+  if (ADMINBOT.includes(adderID)) return;
 
-  // لو المطور أضاف — اسمح
-  if (adderIsAdmin) return;
-
-  // جيب اسم الشخص اللي أضاف
-  const adderName = await Users.getNameUser(adderID).catch(() => adderID);
-
-  // اطرد كل الأعضاء الجدد
-  const failed = [];
+  // اطرد الأعضاء الجدد
+  let kicked = 0, failed = 0;
   for (const member of added) {
     const uid = String(member.userFbId);
     if (uid === botID) continue;
-
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 800));
     await new Promise(resolve => {
-      api.removeUserFromGroup(uid, threadID, (err) => {
-        if (err) failed.push(uid);
+      api.removeUserFromGroup(uid, threadID, err => {
+        err ? failed++ : kicked++;
         resolve();
       });
     });
   }
 
-  const names = await Promise.all(
-    added.map(m => Users.getNameUser(m.userFbId).catch(() => m.userFbId))
-  );
+  const adderName = await Users.getNameUser(adderID).catch(() => adderID);
 
-  const msg = failed.length
-    ? `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗔𝗡𝗧𝗜 ━━ ⌬\n\n🚫 وضع مضاد الإضافة مفعّل!\n👤 أضاف: ${adderName}\n👥 ${names.join("، ")}\n⚠️ فشل طرد بعضهم — قد لا أكون أدمن`
-    : `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗔𝗡𝗧𝗜 ━━ ⌬\n\n🚫 وضع مضاد الإضافة مفعّل!\n👤 أضاف: ${adderName}\n👥 تم طرد: ${names.join("، ")}`;
+  let msg = `🚫 مضاد الإضافة\n👤 ${adderName}`;
+  if (kicked)  msg += `\n✅ طُرد: ${kicked}`;
+  if (failed)  msg += `\n❌ فشل: ${failed} — تأكد إن البوت أدمن`;
 
   return api.sendMessage(msg, threadID);
 };
