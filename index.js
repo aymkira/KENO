@@ -753,16 +753,38 @@ function startBot(message) {
 }
 
 // ══════════════════════════════════════════════════
-//   SELF PING — يمنع النوم على Render/Railway
+//   SELF PING — يمنع النوم والـ idle restart على Railway
 // ══════════════════════════════════════════════════
-const SELF_URL = process.env.RENDER_URL || process.env.RAILWAY_PUBLIC_DOMAIN || "";
+const SELF_URL = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RENDER_URL || "";
 if (SELF_URL) {
   const pingUrl = SELF_URL.startsWith("http") ? SELF_URL : `https://${SELF_URL}`;
-  setInterval(() => {
-    axios.get(pingUrl).catch(() => {});
-    console.log(chalk.bold.hex("#FF6600")(`[ 🏓 PING ] → ${pingUrl}`));
-  }, 4 * 60 * 1000);
+
+  // ping كل دقيقتين بدل 4 دقائق — Railway يقتل الـ process عند الـ idle
+  setInterval(async () => {
+    try {
+      await axios.get(pingUrl, { timeout: 8000 });
+      console.log(chalk.bold.hex("#00FA9A")(`[ 🏓 PING ✅ ] → ${pingUrl}`));
+    } catch(e) {
+      console.log(chalk.bold.hex("#FF6600")(`[ 🏓 PING ❌ ] ${e.message}`));
+    }
+  }, 2 * 60 * 1000);
+
+  // ping ثانوي على /health endpoint كل 5 دقائق
+  setInterval(async () => {
+    try { await axios.get(`${pingUrl}/health`, { timeout: 5000 }); } catch(_) {}
+  }, 5 * 60 * 1000);
 }
+
+// health endpoint
+app.get("/health", (req, res) => {
+  res.json({
+    status: "alive",
+    uptime: Math.floor((Date.now() - BOOT_TIME) / 1000),
+    bot: global.client?.api ? "connected" : "disconnected",
+    commands: global.client?.commands?.size || 0,
+    timestamp: new Date().toISOString()
+  });
+});
 
 // ══════════════════════════════════════════════════
 //   START
