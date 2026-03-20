@@ -97,7 +97,7 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 		},
 		keepalive: 60,
 		reschedulePings: true,
-		reconnectPeriod: 3
+		reconnectPeriod: 0  // نحن نتحكم بإعادة الاتصال يدوياً — نمنع MQTT من التدخل
 	};
 
 	if (typeof ctx.globalOptions.proxy != "undefined") {
@@ -108,18 +108,27 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 	ctx.mqttClient = new mqtt.Client(_ => websocket(host, options.wsOptions), options);
 
 	const mqttClient = ctx.mqttClient;
+	let _reconnecting = false; // منع إعادة الاتصال المزدوجة (error يُطلق close أيضاً)
+
+	function safeReconnect(delayMs) {
+		if (_reconnecting) return;
+		_reconnecting = true;
+		setTimeout(() => {
+			_reconnecting = false;
+			listenMqtt(defaultFuncs, api, ctx, globalCallback);
+		}, delayMs || 5000);
+	}
 
 	mqttClient.on('error', function (err) {
 		log.error("listenMqtt", err);
 		mqttClient.end();
-		// دائماً نعيد الاتصال بغض النظر عن autoReconnect
-		setTimeout(() => listenMqtt(defaultFuncs, api, ctx, globalCallback), 5000);
+		safeReconnect(5000);
 	});
 
 	mqttClient.on('close', function () {
-		// إعادة الاتصال تلقائياً عند انقطاع الاتصال
+		// close يُطلق دائماً بعد error — safeReconnect تمنع التكرار
 		if (ctx.globalOptions.autoReconnect !== false) {
-			setTimeout(() => listenMqtt(defaultFuncs, api, ctx, globalCallback), 5000);
+			safeReconnect(5000);
 		}
 	});
 
