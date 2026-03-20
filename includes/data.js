@@ -1,6 +1,6 @@
 // ╔══════════════════════════════════════════════════════════════════╗
-// ║              KIRA DATA SYSTEM v1.0                               ║
-// ║   نظام بيانات كامل — GitHub JSON — repo منفصل                  ║
+// ║              KIRA DATA SYSTEM v2.0                               ║
+// ║   نظام بيانات موحّد — GitHub JSON — بدون race condition         ║
 // ║                                                                  ║
 // ║   الملفات:                                                       ║
 // ║   user/users.json      ← بيانات المستخدمين الأساسية             ║
@@ -8,14 +8,18 @@
 // ║   user/bans.json       ← سجل الحظر                             ║
 // ║   user/history.json    ← سجل الأحداث                           ║
 // ║   group/threads.json   ← بيانات المجموعات                      ║
+// ║   user/analysis.json   ← تحليل الشخصيات                        ║
+// ║   user/kicked.json     ← المطرودون الدائمون                     ║
 // ╚══════════════════════════════════════════════════════════════════╝
+
+'use strict';
 
 const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
 
 // ══════════════════════════════════════════════════
-//  إعدادات
+//  إعدادات — من config.json فقط، لا fallback مكشوف
 // ══════════════════════════════════════════════════
 function loadConfig() {
   for (const p of [
@@ -24,15 +28,21 @@ function loadConfig() {
   ]) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch(_){} }
   return {};
 }
-const CFG      = loadConfig();
-const TOKEN    = CFG.GITHUB_TOKEN || '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';
-const REPO     = 'aymkira/data';
+
+const CFG   = loadConfig();
+const TOKEN = CFG.GITHUB_TOKEN;
+const REPO  = CFG.GITHUB_DATA_REPO || 'aymkira/data';
+
+if (!TOKEN) {
+  console.error('[DATA] ❌ GITHUB_TOKEN مو موجود في config.json أو Railway Env!');
+}
 
 // ══════════════════════════════════════════════════
-//  كاش متعدد الملفات
+//  كاش + Write Queue (حل Race Condition)
 // ══════════════════════════════════════════════════
-const _cache   = {};   // { 'user/users.json': { data: {}, sha: '' } }
-const _dirty   = new Set();  // ملفات تحتاج رفع
+const _cache      = {};   // filePath → { data, sha }
+const _saveTimers = {};   // filePath → timeout handle  ← القلب الجديد
+const SAVE_DELAY  = 2500; // ms — بعد آخر تعديل بـ 2.5 ثانية يرفع
 
 // ══════════════════════════════════════════════════
 //  GitHub API
@@ -70,7 +80,7 @@ function encodePath(p) {
 }
 
 // ══════════════════════════════════════════════════
-//  تحميل ملف من GitHub
+//  تحميل ملف من GitHub (مع كاش)
 // ══════════════════════════════════════════════════
 async function loadFile(filePath) {
   if (_cache[filePath]) return _cache[filePath].data;
@@ -84,37 +94,62 @@ async function loadFile(filePath) {
     }
   } catch(_) {}
 
-  // ملف جديد
   _cache[filePath] = { data: {}, sha: null };
   return {};
 }
 
 // ══════════════════════════════════════════════════
-//  رفع ملف لـ GitHub
+//  رفع ملف لـ GitHub (الرفع الحقيقي)
 // ══════════════════════════════════════════════════
-async function saveFile(filePath, msg) {
+async function _doSave(filePath) {
   const entry = _cache[filePath];
   if (!entry) return false;
 
   try {
     const content = Buffer.from(JSON.stringify(entry.data, null, 2)).toString('base64');
     const body    = {
-      message: `🤖 ${msg || 'update'} — KIRA`,
+      message: `🤖 auto-save — KIRA`,
       content,
       ...(entry.sha ? { sha: entry.sha } : {}),
     };
     const res = await gh('PUT', `/contents/${encodePath(filePath)}`, body);
     if (res.status === 200 || res.status === 201) {
       entry.sha = res.data?.content?.sha || entry.sha;
-      _dirty.delete(filePath);
       return true;
     }
-    console.error(`[DATA] فشل حفظ ${filePath}:`, res.data?.message);
+    // لو فشل بسبب conflict (409) — أعد تحميل الـ sha وحاول مرة ثانية
+    if (res.status === 409 || res.status === 422) {
+      console.warn(`[DATA] ⚠️ conflict في ${filePath} — إعادة sync...`);
+      delete _cache[filePath];
+      await loadFile(filePath);
+      // لا ترفع مرة ثانية تلقائياً — الـ scheduleSave التالي سيعالجها
+    }
     return false;
   } catch(e) {
-    console.error(`[DATA] خطأ ${filePath}:`, e.message);
+    console.error(`[DATA] خطأ في حفظ ${filePath}:`, e.message);
     return false;
   }
+}
+
+// ══════════════════════════════════════════════════
+//  الجدولة — بدل saveFile المباشر
+//  كل التعديلات تمر هنا، يرفع مرة واحدة بعد SAVE_DELAY
+// ══════════════════════════════════════════════════
+function scheduleSave(filePath) {
+  if (_saveTimers[filePath]) clearTimeout(_saveTimers[filePath]);
+  _saveTimers[filePath] = setTimeout(async () => {
+    delete _saveTimers[filePath];
+    await _doSave(filePath);
+  }, SAVE_DELAY);
+}
+
+// حفظ فوري لملف معين (للـ flushAll أو عند إيقاف البوت)
+async function saveFile(filePath) {
+  if (_saveTimers[filePath]) {
+    clearTimeout(_saveTimers[filePath]);
+    delete _saveTimers[filePath];
+  }
+  return await _doSave(filePath);
 }
 
 // ══════════════════════════════════════════════════
@@ -138,160 +173,184 @@ function rankName(level) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  ① users.json — بيانات المستخدمين الأساسية
+//  ثوابت المسارات
 // ═══════════════════════════════════════════════════════
-const USERS_FILE    = 'user/users.json';
-const WALLET_FILE   = 'user/wallet.json';
-const BANS_FILE     = 'user/bans.json';
-const HISTORY_FILE  = 'user/history.json';
-const THREADS_FILE  = 'group/threads.json';
-const ANALYSIS_FILE = 'user/analysis.json';
-const KICKED_FILE   = 'user/kicked.json';
+const FILES = {
+  USERS:    'user/users.json',
+  WALLET:   'user/wallet.json',
+  BANS:     'user/bans.json',
+  HISTORY:  'user/history.json',
+  THREADS:  'group/threads.json',
+  ANALYSIS: 'user/analysis.json',
+  KICKED:   'user/kicked.json',
+};
 
-// جلب مستخدم
+// ═══════════════════════════════════════════════════════
+//  ① USERS — بيانات المستخدمين
+// ═══════════════════════════════════════════════════════
 async function getUser(userID) {
-  const db = await loadFile(USERS_FILE);
+  const db = await loadFile(FILES.USERS);
   return db[String(userID)] || null;
 }
 
-// إنشاء أو تحديث مستخدم
-async function setUser(userID, data, save = true) {
-  const db  = await loadFile(USERS_FILE);
-  const id  = String(userID);
-  db[id]    = { ...(db[id] || { userID: id, createdAt: now() }), ...data, updatedAt: now() };
-  _cache[USERS_FILE].data = db;
-  _dirty.add(USERS_FILE);
-  if (save) await saveFile(USERS_FILE, `update user ${id}`);
+async function setUser(userID, data) {
+  const db = await loadFile(FILES.USERS);
+  const id = String(userID);
+  db[id] = { ...(db[id] || { userID: id, createdAt: now() }), ...data, updatedAt: now() };
+  _cache[FILES.USERS].data = db;
+  scheduleSave(FILES.USERS);
   return db[id];
 }
 
-// التأكد من وجود المستخدم (إنشاء لو ما موجود)
 async function ensureUser(userID, name = '') {
-  const user = await getUser(userID);
+  let user = await getUser(userID);
   if (!user) {
     await setUser(userID, { name, messageCount: 0 });
     await ensureWallet(userID);
+    user = await getUser(userID);
   }
-  return await getUser(userID);
+  return user;
 }
 
-// حذف مستخدم
-async function deleteUser(userID, save = true) {
-  const db = await loadFile(USERS_FILE);
-  const id  = String(userID);
+async function deleteUser(userID) {
+  const db = await loadFile(FILES.USERS);
+  const id = String(userID);
   if (!db[id]) return false;
   delete db[id];
-  _cache[USERS_FILE].data = db;
-  _dirty.add(USERS_FILE);
-  if (save) await saveFile(USERS_FILE, `delete user ${id}`);
+  _cache[FILES.USERS].data = db;
+  scheduleSave(FILES.USERS);
   return true;
 }
 
-// كل المستخدمين
 async function getAllUsers() {
-  const db = await loadFile(USERS_FILE);
+  const db = await loadFile(FILES.USERS);
   return Object.values(db);
 }
 
-// زيادة عداد الرسائل
 async function incrementMessages(userID, name = '') {
   await ensureUser(userID, name);
-  const db = await loadFile(USERS_FILE);
-  const id  = String(userID);
+  const db = await loadFile(FILES.USERS);
+  const id = String(userID);
   db[id].messageCount = (db[id].messageCount || 0) + 1;
   db[id].lastSeen     = now();
   if (name && !db[id].name) db[id].name = name;
-  _cache[USERS_FILE].data = db;
-  _dirty.add(USERS_FILE);
-
-  // ── XP تلقائي — نقطة لكل رسالة ──────────────────
+  _cache[FILES.USERS].data = db;
+  scheduleSave(FILES.USERS);
+  // XP تلقائي
   try { await addExp(userID, 1); } catch(_) {}
-  // لا نحفظ كل رسالة — الحفظ التلقائي كل 5 دقائق
   return db[id];
 }
 
 // ═══════════════════════════════════════════════════════
-//  ② wallet.json — المحافظ
+//  ② WALLET — المحافظ (موحّد مع Currencies القديم)
 // ═══════════════════════════════════════════════════════
 async function ensureWallet(userID) {
-  const db = await loadFile(WALLET_FILE);
-  const id  = String(userID);
+  const db = await loadFile(FILES.WALLET);
+  const id = String(userID);
   if (!db[id]) {
-    db[id] = { userID: id, money: 0, bank: 0, exp: 0, level: 1, rank: 'مبتدئ', rankEmoji: '🔰', totalEarned: 0, createdAt: now() };
-    _cache[WALLET_FILE].data = db;
-    _dirty.add(WALLET_FILE);
-    await saveFile(WALLET_FILE, `create wallet ${id}`);
+    db[id] = {
+      userID: id,
+      money: 0,
+      bank: 0,
+      exp: 0,
+      level: 1,
+      rank: 'مبتدئ',
+      rankEmoji: '🔰',
+      totalEarned: 0,
+      createdAt: now(),
+    };
+    _cache[FILES.WALLET].data = db;
+    scheduleSave(FILES.WALLET);
   }
   return db[id];
 }
 
 async function getWallet(userID) {
-  const db = await loadFile(WALLET_FILE);
+  const db = await loadFile(FILES.WALLET);
   return db[String(userID)] || await ensureWallet(userID);
 }
 
-async function addMoney(userID, amount) {
-  const db  = await loadFile(WALLET_FILE);
-  const id  = String(userID);
+// ── دالة موحّدة للتعديل على المحفظة — كل عمليات الفلوس تمر هنا
+async function _mutateWallet(userID, mutateFn) {
   await ensureWallet(userID);
-  db[id].money       = (db[id].money || 0) + Number(amount);
-  db[id].totalEarned = (db[id].totalEarned || 0) + Math.max(0, Number(amount));
-  db[id].updatedAt   = now();
-  _cache[WALLET_FILE].data = db;
-  _dirty.add(WALLET_FILE);
-  await saveFile(WALLET_FILE, `add money ${id}`);
-  return db[id].money;
+  const db = await loadFile(FILES.WALLET);
+  const id = String(userID);
+  mutateFn(db[id]);
+  db[id].updatedAt = now();
+  _cache[FILES.WALLET].data = db;
+  scheduleSave(FILES.WALLET);
+  return db[id];
+}
+
+async function addMoney(userID, amount) {
+  amount = Number(amount);
+  return _mutateWallet(userID, w => {
+    w.money       = (w.money || 0) + amount;
+    w.totalEarned = (w.totalEarned || 0) + Math.max(0, amount);
+  });
 }
 
 async function removeMoney(userID, amount) {
-  const db  = await loadFile(WALLET_FILE);
-  const id  = String(userID);
+  amount = Number(amount);
+  const db = await loadFile(FILES.WALLET);
+  const id = String(userID);
   await ensureWallet(userID);
-  if ((db[id].money || 0) < Number(amount)) return { success: false, balance: db[id].money };
-  db[id].money     -= Number(amount);
-  db[id].updatedAt  = now();
-  _cache[WALLET_FILE].data = db;
-  _dirty.add(WALLET_FILE);
-  await saveFile(WALLET_FILE, `remove money ${id}`);
-  return { success: true, balance: db[id].money };
+  if ((db[id].money || 0) < amount) return { success: false, balance: db[id].money };
+  await _mutateWallet(userID, w => { w.money -= amount; });
+  return { success: true, balance: db[String(userID)].money };
 }
 
 async function addBank(userID, amount) {
-  const db  = await loadFile(WALLET_FILE);
-  const id  = String(userID);
+  amount = Number(amount);
+  return _mutateWallet(userID, w => { w.bank = (w.bank || 0) + amount; });
+}
+
+async function removeBank(userID, amount) {
+  amount = Number(amount);
+  const db = await loadFile(FILES.WALLET);
+  const id = String(userID);
   await ensureWallet(userID);
-  db[id].bank      = (db[id].bank || 0) + Number(amount);
-  db[id].updatedAt  = now();
-  _cache[WALLET_FILE].data = db;
-  _dirty.add(WALLET_FILE);
-  await saveFile(WALLET_FILE, `add bank ${id}`);
-  return db[id].bank;
+  if ((db[id].bank || 0) < amount) return { success: false, balance: db[id].bank };
+  await _mutateWallet(userID, w => { w.bank -= amount; });
+  return { success: true, balance: db[String(userID)].bank };
 }
 
 async function addExp(userID, amount = 1) {
-  const db  = await loadFile(WALLET_FILE);
-  const id  = String(userID);
-  await ensureWallet(userID);
-  const oldLevel  = db[id].level || 1;
-  db[id].exp      = (db[id].exp || 0) + Number(amount);
-  const newLevel  = calcLevel(db[id].exp);
-  const rank      = rankName(newLevel);
-  db[id].level    = newLevel;
-  db[id].rank     = rank.name;
-  db[id].rankEmoji = rank.emoji;
-  db[id].updatedAt = now();
-  _cache[WALLET_FILE].data = db;
-  _dirty.add(WALLET_FILE);
-  await saveFile(WALLET_FILE, `add exp ${id}`);
-  return { exp: db[id].exp, level: newLevel, levelUp: newLevel > oldLevel, rank };
+  amount = Number(amount);
+  let levelUp = false, newLevel, rank;
+  await _mutateWallet(userID, w => {
+    const oldLevel = w.level || 1;
+    w.exp          = (w.exp || 0) + amount;
+    newLevel       = calcLevel(w.exp);
+    rank           = rankName(newLevel);
+    w.level        = newLevel;
+    w.rank         = rank.name;
+    w.rankEmoji    = rank.emoji;
+    levelUp        = newLevel > oldLevel;
+  });
+  return { exp: (await getWallet(userID)).exp, level: newLevel, levelUp, rank };
+}
+
+// توافق مع Currencies القديم (للأوامر اللي استخدمت Currencies.increaseMoney)
+async function increaseMoney(userID, amount) {
+  return addMoney(userID, amount);
+}
+
+async function decreaseMoney(userID, amount) {
+  return removeMoney(userID, amount);
+}
+
+// getData — توافق مع Currencies.getData(senderID).money
+async function getData(userID) {
+  return getWallet(userID);
 }
 
 // ═══════════════════════════════════════════════════════
-//  ③ bans.json — الحظر
+//  ③ BANS — الحظر
 // ═══════════════════════════════════════════════════════
 async function banUser(userID, reason = '', bannedBy = '', duration = 0) {
-  const db  = await loadFile(BANS_FILE);
-  const id  = String(userID);
+  const db = await loadFile(FILES.BANS);
+  const id = String(userID);
   const expiresAt = duration > 0 ? new Date(Date.now() + duration * 60000).toISOString() : null;
 
   db[id] = {
@@ -300,94 +359,78 @@ async function banUser(userID, reason = '', bannedBy = '', duration = 0) {
     bannedAt:  now(),
     expiresAt,
     duration,
-    history:   [...(db[id]?.history || []), { action: 'ban', reason, by: bannedBy, at: now() }],
+    history: [...(db[id]?.history || []), { action: 'ban', reason, by: bannedBy, at: now() }],
   };
-  _cache[BANS_FILE].data = db;
-  _dirty.add(BANS_FILE);
-  await saveFile(BANS_FILE, `ban user ${id}`);
-
-  // تحديث حالة الحظر في global
+  _cache[FILES.BANS].data = db;
+  scheduleSave(FILES.BANS);
   global.data?.userBanned?.set(id, { reason, dateAdded: now(), expiresAt });
   return db[id];
 }
 
 async function unbanUser(userID, unbannedBy = '') {
-  const db  = await loadFile(BANS_FILE);
-  const id  = String(userID);
+  const db = await loadFile(FILES.BANS);
+  const id = String(userID);
   if (!db[id]?.banned) return false;
-
-  db[id].banned      = false;
-  db[id].unbannedAt  = now();
-  db[id].unbannedBy  = unbannedBy;
-  db[id].history     = [...(db[id].history || []), { action: 'unban', by: unbannedBy, at: now() }];
-  _cache[BANS_FILE].data = db;
-  _dirty.add(BANS_FILE);
-  await saveFile(BANS_FILE, `unban user ${id}`);
-
-  // رفع من global
+  db[id].banned     = false;
+  db[id].unbannedAt = now();
+  db[id].unbannedBy = unbannedBy;
+  db[id].history    = [...(db[id].history || []), { action: 'unban', by: unbannedBy, at: now() }];
+  _cache[FILES.BANS].data = db;
+  scheduleSave(FILES.BANS);
   global.data?.userBanned?.delete(id);
   return true;
 }
 
 async function getBan(userID) {
-  const db = await loadFile(BANS_FILE);
+  const db = await loadFile(FILES.BANS);
   return db[String(userID)] || null;
 }
 
 async function getAllBans() {
-  const db = await loadFile(BANS_FILE);
+  const db = await loadFile(FILES.BANS);
   return Object.values(db).filter(u => u.banned);
 }
 
 // ═══════════════════════════════════════════════════════
-//  ③-b kicked.json — المطرودون الدائمون
+//  ④ KICKED — المطرودون الدائمون
 // ═══════════════════════════════════════════════════════
 async function kickUser(userID, reason = '', kickedBy = '') {
-  const db = await loadFile(KICKED_FILE);
+  const db = await loadFile(FILES.KICKED);
   const id = String(userID);
-  db[id] = {
-    userID: id,
-    reason,
-    kickedBy: String(kickedBy),
-    kickedAt: now(),
-  };
-  _cache[KICKED_FILE].data = db;
-  _dirty.add(KICKED_FILE);
-  await saveFile(KICKED_FILE, `kick user ${id}`);
-
-  // تحديث الذاكرة
+  db[id] = { userID: id, reason, kickedBy: String(kickedBy), kickedAt: now() };
+  _cache[FILES.KICKED].data = db;
+  scheduleSave(FILES.KICKED);
   if (!global._kickedUsers) global._kickedUsers = new Map();
   global._kickedUsers.set(id, db[id]);
   return db[id];
 }
 
 async function unkickUser(userID) {
-  const db = await loadFile(KICKED_FILE);
+  const db = await loadFile(FILES.KICKED);
   const id = String(userID);
   if (!db[id]) return false;
   delete db[id];
-  _cache[KICKED_FILE].data = db;
-  _dirty.add(KICKED_FILE);
-  await saveFile(KICKED_FILE, `unkick user ${id}`);
+  _cache[FILES.KICKED].data = db;
+  scheduleSave(FILES.KICKED);
   global._kickedUsers?.delete(id);
   return true;
 }
 
 async function getKick(userID) {
-  const db = await loadFile(KICKED_FILE);
+  const db = await loadFile(FILES.KICKED);
   return db[String(userID)] || null;
 }
 
 async function getAllKicked() {
-  const db = await loadFile(KICKED_FILE);
+  const db = await loadFile(FILES.KICKED);
   return Object.values(db);
 }
 
-// تحميل المطرودين للذاكرة عند بدء التشغيل
+// تحميل المطرودين عند البدء
 ;(async () => {
   try {
     if (!global._kickedUsers) global._kickedUsers = new Map();
-    const db = await loadFile(KICKED_FILE);
+    const db = await loadFile(FILES.KICKED);
     for (const [id, data] of Object.entries(db))
       global._kickedUsers.set(id, data);
     if (Object.keys(db).length)
@@ -396,44 +439,40 @@ async function getAllKicked() {
 })();
 
 // ═══════════════════════════════════════════════════════
-//  ④ history.json — سجل الأحداث
+//  ⑤ HISTORY — سجل الأحداث
 // ═══════════════════════════════════════════════════════
 async function logEvent(type, data) {
-  const db  = await loadFile(HISTORY_FILE);
-  const key  = `${Date.now()}_${type}`;
-  db[key]    = { type, ...data, at: now() };
-
-  // احتفظ بآخر 500 حدث فقط
+  const db  = await loadFile(FILES.HISTORY);
+  const key = `${Date.now()}_${type}`;
+  db[key]   = { type, ...data, at: now() };
+  // احتفظ بآخر 500 فقط
   const keys = Object.keys(db).sort();
-  if (keys.length > 500) {
+  if (keys.length > 500)
     for (const k of keys.slice(0, keys.length - 500)) delete db[k];
-  }
-  _cache[HISTORY_FILE].data = db;
-  _dirty.add(HISTORY_FILE);
-  // لا نحفظ فوراً — الحفظ التلقائي
+  _cache[FILES.HISTORY].data = db;
+  scheduleSave(FILES.HISTORY);
 }
 
 async function getHistory(limit = 20) {
-  const db   = await loadFile(HISTORY_FILE);
+  const db   = await loadFile(FILES.HISTORY);
   const keys = Object.keys(db).sort().reverse().slice(0, limit);
   return keys.map(k => db[k]);
 }
 
 // ═══════════════════════════════════════════════════════
-//  ⑤ threads.json — المجموعات
+//  ⑥ THREADS — المجموعات
 // ═══════════════════════════════════════════════════════
 async function getThread(threadID) {
-  const db = await loadFile(THREADS_FILE);
+  const db = await loadFile(FILES.THREADS);
   return db[String(threadID)] || null;
 }
 
-async function setThread(threadID, data, save = true) {
-  const db  = await loadFile(THREADS_FILE);
-  const id  = String(threadID);
-  db[id]    = { ...(db[id] || { threadID: id, createdAt: now() }), ...data, updatedAt: now() };
-  _cache[THREADS_FILE].data = db;
-  _dirty.add(THREADS_FILE);
-  if (save) await saveFile(THREADS_FILE, `update thread ${id}`);
+async function setThread(threadID, data) {
+  const db = await loadFile(FILES.THREADS);
+  const id = String(threadID);
+  db[id]   = { ...(db[id] || { threadID: id, createdAt: now() }), ...data, updatedAt: now() };
+  _cache[FILES.THREADS].data = db;
+  scheduleSave(FILES.THREADS);
   return db[id];
 }
 
@@ -449,42 +488,42 @@ async function unbanThread(threadID) {
   return entry;
 }
 
+async function getAllThreads() {
+  const db = await loadFile(FILES.THREADS);
+  return Object.values(db);
+}
+
 // ═══════════════════════════════════════════════════════
-//  ⑥ analysis.json — تحليل الشخصيات
+//  ⑦ ANALYSIS — تحليل الشخصيات
 // ═══════════════════════════════════════════════════════
 async function getAnalysis(userID) {
-  const db = await loadFile(ANALYSIS_FILE);
+  const db = await loadFile(FILES.ANALYSIS);
   return db[String(userID)] || null;
 }
 
 async function setAnalysis(userID, data) {
-  const db = await loadFile(ANALYSIS_FILE);
+  const db = await loadFile(FILES.ANALYSIS);
   const id = String(userID);
   db[id] = { ...(db[id] || { userID: id, createdAt: now() }), ...data, updatedAt: now() };
-  _cache[ANALYSIS_FILE].data = db;
-  _dirty.add(ANALYSIS_FILE);
-  await saveFile(ANALYSIS_FILE, `analysis ${id}`);
+  _cache[FILES.ANALYSIS].data = db;
+  scheduleSave(FILES.ANALYSIS);
   return db[id];
 }
 
 async function getAllAnalysis() {
-  const db = await loadFile(ANALYSIS_FILE);
+  const db = await loadFile(FILES.ANALYSIS);
   return Object.values(db);
 }
 
-// ══════════════════════════════════════════════════
-//  إدارة الملفات
-// ══════════════════════════════════════════════════
-
-// إنشاء ملف مخصص داخل مجلد user أو group
+// ═══════════════════════════════════════════════════════
+//  ⑧ ملفات مخصصة
+// ═══════════════════════════════════════════════════════
 async function createCustomFile(filePath, initialData = {}) {
-  if (!filePath.startsWith('user/') && !filePath.startsWith('group/')) {
+  if (!filePath.startsWith('user/') && !filePath.startsWith('group/'))
     filePath = `user/${filePath}`;
-  }
   if (!filePath.endsWith('.json')) filePath += '.json';
   _cache[filePath] = { data: initialData, sha: null };
-  _dirty.add(filePath);
-  await saveFile(filePath, `create ${filePath}`);
+  scheduleSave(filePath);
   return filePath;
 }
 
@@ -492,51 +531,61 @@ async function readCustomFile(filePath) {
   return await loadFile(filePath);
 }
 
-async function writeCustomFile(filePath, data, msg) {
+async function writeCustomFile(filePath, data) {
   if (!_cache[filePath]) _cache[filePath] = { data: {}, sha: null };
   _cache[filePath].data = data;
-  _dirty.add(filePath);
-  return await saveFile(filePath, msg || `update ${filePath}`);
+  scheduleSave(filePath);
+  return true;
 }
 
-// حفظ يدوي لكل الملفات المعدّلة
+// ═══════════════════════════════════════════════════════
+//  إدارة عامة
+// ═══════════════════════════════════════════════════════
+
+// حفظ كل الملفات المعلقة فوراً (للإيقاف النظيف)
 async function flushAll() {
-  const files  = [..._dirty];
-  const results = await Promise.all(files.map(f => saveFile(f, 'flush all')));
+  const pending = Object.keys(_saveTimers);
+  if (!pending.length) return true;
+  const results = await Promise.all(pending.map(f => saveFile(f)));
   return results.every(Boolean);
 }
 
-// إعادة تحميل ملف من GitHub
+// إعادة تحميل من GitHub
 async function reload(filePath) {
-  if (_cache[filePath]) delete _cache[filePath];
+  delete _cache[filePath];
   return await loadFile(filePath);
 }
 
 // إحصائيات
 async function stats() {
-  const users   = await loadFile(USERS_FILE);
-  const wallets = await loadFile(WALLET_FILE);
-  const bans    = await loadFile(BANS_FILE);
-  const threads = await loadFile(THREADS_FILE);
+  const users   = await loadFile(FILES.USERS);
+  const wallets = await loadFile(FILES.WALLET);
+  const bans    = await loadFile(FILES.BANS);
+  const threads = await loadFile(FILES.THREADS);
   return {
-    users:        Object.keys(users).length,
-    wallets:      Object.keys(wallets).length,
-    activeBans:   Object.values(bans).filter(b => b.banned).length,
-    threads:      Object.keys(threads).length,
-    dirtyFiles:   _dirty.size,
-    cachedFiles:  Object.keys(_cache).length,
+    users:       Object.keys(users).length,
+    wallets:     Object.keys(wallets).length,
+    activeBans:  Object.values(bans).filter(b => b.banned).length,
+    threads:     Object.keys(threads).length,
+    pendingSave: Object.keys(_saveTimers).length,
+    cachedFiles: Object.keys(_cache).length,
   };
 }
 
 // ══════════════════════════════════════════════════
-//  حفظ تلقائي كل 5 دقائق
+//  حفظ تلقائي كل 5 دقائق (خط دفاع ثانٍ)
 // ══════════════════════════════════════════════════
 setInterval(async () => {
-  if (_dirty.size > 0) {
-    console.log(`[DATA] 💾 حفظ تلقائي لـ ${_dirty.size} ملف...`);
+  const pending = Object.keys(_saveTimers);
+  if (pending.length > 0) {
+    console.log(`[DATA] 💾 flush دوري لـ ${pending.length} ملف...`);
     await flushAll();
   }
 }, 5 * 60 * 1000);
+
+// حفظ نظيف عند إيقاف البوت
+process.on('SIGTERM', async () => { await flushAll(); });
+process.on('SIGINT',  async () => { await flushAll(); });
 
 // ══════════════════════════════════════════════════
 //  تصدير كل شيء
@@ -545,8 +594,14 @@ module.exports = {
   // ── مستخدمين ──
   getUser, setUser, ensureUser, deleteUser, getAllUsers, incrementMessages,
 
-  // ── محافظ ──
-  getWallet, ensureWallet, addMoney, removeMoney, addBank, addExp,
+  // ── محافظ (+ توافق مع Currencies القديم) ──
+  getWallet, ensureWallet,
+  addMoney, removeMoney,
+  addBank, removeBank,
+  addExp,
+  increaseMoney,   // ← Currencies.increaseMoney
+  decreaseMoney,   // ← Currencies.decreaseMoney
+  getData,         // ← Currencies.getData
 
   // ── حظر ──
   banUser, unbanUser, getBan, getAllBans,
@@ -555,21 +610,21 @@ module.exports = {
   kickUser, unkickUser, getKick, getAllKicked,
 
   // ── مجموعات ──
-  getThread, setThread, banThread, unbanThread,
+  getThread, setThread, banThread, unbanThread, getAllThreads,
 
   // ── سجل ──
   logEvent, getHistory,
+
+  // ── تحليل ──
+  getAnalysis, setAnalysis, getAllAnalysis,
 
   // ── ملفات مخصصة ──
   createCustomFile, readCustomFile, writeCustomFile,
 
   // ── إدارة ──
   flushAll, reload, stats,
-  loadFile, saveFile,
-
-  // ── تحليل ──
-  getAnalysis, setAnalysis, getAllAnalysis,
+  loadFile, saveFile, scheduleSave,
 
   // ── ثوابت ──
-  FILES: { USERS: USERS_FILE, WALLET: WALLET_FILE, BANS: BANS_FILE, HISTORY: HISTORY_FILE, THREADS: THREADS_FILE, ANALYSIS: ANALYSIS_FILE, KICKED: KICKED_FILE },
+  FILES,
 };
