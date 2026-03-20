@@ -1,96 +1,83 @@
+// ══════════════════════════════════════════════════════════════
+//  users.js v2.0 — bridge كامل لـ data.js
+// ══════════════════════════════════════════════════════════════
+
+const path = require('path');
+
+function getDB() {
+  try { return require(path.join(process.cwd(), 'includes', 'data.js')); }
+  catch(e) { throw new Error('[Users] فشل تحميل data.js: ' + e.message); }
+}
+
 module.exports = function ({ models, api }) {
-	const Users = models.use('Users');
 
-	async function getInfo(id) {
-		return (await api.getUserInfo(id))[id];
-	}
+  const db = getDB();
 
-	async function getNameUser(id) {
-		try {
-			if (global.data.userName.has(id)) return global.data.userName.get(id);
-			else if (global.data.allUserID.includes(id)) {
-				const nameUser = (await this.getData(id)).name;
-				if (nameUser) return nameUser;
-				else return "Facebook User";
-			} else return "Facebook User";
-		}
-		catch { return "Facebook User" }
-	}
+  // ── getInfo — من Facebook API مباشرة ─────────────────────
+  async function getInfo(id) {
+    return (await api.getUserInfo(id))[id];
+  }
 
-	async function getAll(...data) {
-		var where, attributes;
-		for (const i of data) {
-			if (typeof i != 'object') throw global.getText("users", "needObjectOrArray");
-			if (Array.isArray(i)) attributes = i;
-			else where = i;
-		}
-		try {
-			return (await Users.findAll({ where, attributes })).map(e => e.get({ plain: true }));
-		}
-		catch (error) {
-			console.error(error);
-			throw new Error(error);
-		}
-	}
+  // ── getNameUser ───────────────────────────────────────────
+  async function getNameUser(id) {
+    try {
+      if (global.data.userName.has(id)) return global.data.userName.get(id);
+      const user = await db.getUser(id);
+      if (user?.name) return user.name;
+      return 'Facebook User';
+    } catch { return 'Facebook User'; }
+  }
 
-	async function getData(userID) {
-		try {
-			const data = await Users.findOne({ where: { userID } });
-			if (data) return data.get({ plain: true });
-			else return false;
-		}
-		catch(error) {
-			console.error(error);
-			throw new Error(error);
-		}
-	}
+  // ── getAll ────────────────────────────────────────────────
+  async function getAll(...args) {
+    const users = await db.loadFile(db.FILES.USERS);
+    let result = Object.values(users);
+    for (const a of args) {
+      if (Array.isArray(a)) {
+        result = result.map(u => {
+          const obj = {};
+          for (const k of a) obj[k] = u[k];
+          return obj;
+        });
+      } else if (typeof a === 'object' && a !== null) {
+        result = result.filter(u =>
+          Object.entries(a).every(([k, v]) => u[k] == v)
+        );
+      }
+    }
+    return result;
+  }
 
-	async function setData(userID, options = {}) {
-		if (typeof options != 'object' && !Array.isArray(options)) throw global.getText("users", "needObject");
-		try {
-			(await Users.findOne({ where: { userID } })).update(options);
-			return true;
-		}
-		catch (error) {
-			try {
-				await this.createData(userID, options);
-			} catch (error) {
-				console.error(error);
-				throw new Error(error);
-			}
-		}
-	}
+  // ── getData ───────────────────────────────────────────────
+  async function getData(userID) {
+    return db.getUser(userID);
+  }
 
-	async function delData(userID) {
-		try {
-			(await Users.findOne({ where: { userID } })).destroy();
-			return true;
-		}
-		catch (error) {
-			console.error(error);
-			throw new Error(error);
-		}
-	}
+  // ── setData ───────────────────────────────────────────────
+  async function setData(userID, options = {}) {
+    await db.setUser(userID, options);
+    return true;
+  }
 
-	async function createData(userID, defaults = {}) {
-		if (typeof defaults != 'object' && !Array.isArray(defaults)) throw global.getText("users", "needObject");
-		try {
-			await Users.findOrCreate({ where: { userID }, defaults });
-			return true;
-		}
-		catch (error) {
-			console.error(error);
-			throw new Error(error);
-		}
-	}
+  // ── delData ───────────────────────────────────────────────
+  async function delData(userID) {
+    return db.deleteUser(userID);
+  }
 
-	return {
-		getInfo,
-		getNameUser,
-		getAll,
-		getData,
-		setData,
-		delData,
-		createData
-	};
+  // ── createData ────────────────────────────────────────────
+  async function createData(userID, defaults = {}) {
+    await db.ensureUser(userID, defaults.name || '');
+    if (Object.keys(defaults).length) await db.setUser(userID, defaults);
+    return true;
+  }
+
+  return {
+    getInfo,
+    getNameUser,
+    getAll,
+    getData,
+    setData,
+    delData,
+    createData,
+  };
 };
