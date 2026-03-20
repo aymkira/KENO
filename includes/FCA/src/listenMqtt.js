@@ -112,27 +112,15 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 	mqttClient.on('error', function (err) {
 		log.error("listenMqtt", err);
 		mqttClient.end();
-		if (ctx.globalOptions.autoReconnect) {
-			listenMqtt(defaultFuncs, api, ctx, globalCallback);
-		} else {
-			utils.checkLiveCookie(ctx, defaultFuncs)
-				.then(res => {
-					globalCallback({
-						type: "stop_listen",
-						error: "Connection refused: Server unavailable"
-					}, null);
-				})
-				.catch(err => {
-					globalCallback({
-						type: "account_inactive",
-						error: "Maybe your account is blocked by facebook, please login and check at https://facebook.com"
-					}, null);
-				});
-		}
+		// دائماً نعيد الاتصال بغض النظر عن autoReconnect
+		setTimeout(() => listenMqtt(defaultFuncs, api, ctx, globalCallback), 5000);
 	});
 
 	mqttClient.on('close', function () {
-
+		// إعادة الاتصال تلقائياً عند انقطاع الاتصال
+		if (ctx.globalOptions.autoReconnect !== false) {
+			setTimeout(() => listenMqtt(defaultFuncs, api, ctx, globalCallback), 5000);
+		}
 	});
 
 	mqttClient.on('connect', function () {
@@ -822,7 +810,10 @@ module.exports = function (defaultFuncs, api, ctx) {
 			})
 			.catch((err) => {
 				log.error("getSeqId", err);
-				if (utils.getType(err) == "Object" && err.error === "Not logged in") ctx.loggedIn = false;
+				if (utils.getType(err) == "Object" && err.error === "Not logged in") {
+					log.info("getSeqId", "Not logged in — reconnecting in 8s...");
+					return setTimeout(() => listenMqtt(defaultFuncs, api, ctx, globalCallback), 8000);
+				}
 				return globalCallback(err);
 			});
 	};
