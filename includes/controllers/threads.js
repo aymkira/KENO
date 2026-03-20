@@ -72,7 +72,7 @@ module.exports = function ({ models, api }) {
 			await Threads.findOrCreate({ where: { threadID }, defaults });
 			return true;
 		}
-		catch {
+		catch (error) {
 			console.error(error);
 			throw new Error(error);
 		}
