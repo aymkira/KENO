@@ -1,12 +1,11 @@
-
+'use strict';
 
 module.exports = function ({ api, models, Users, Threads, Currencies }) {
-    const logger = require("../../utils/log.js");
-    const moment = require("moment-timezone");
+    const logger = require('../../utils/log.js');
+    const moment = require('moment-timezone');
 
     return async function ({ event }) {
         const timeStart = Date.now();
-        const time = moment.tz("Asia/Baghdad").format("HH:mm:ss DD/MM/YYYY");
 
         const { userBanned, threadBanned } = global.data;
         const { events } = global.client;
@@ -16,16 +15,11 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         senderID = String(senderID);
         threadID = String(threadID);
 
-        // ════════════════════════════════════════════════════════════
-        // 🗑️ حذف رسائل البوت عبر التفاعل — من KIRA
-        // ════════════════════════════════════════════════════════════
-        if (type === "message_reaction" && messageReply?.senderID === api.getCurrentUserID()) {
-            const deleteReactions = ["👍", "😡", "🗑️", "❌", "💔", "🚫", "⛔"];
+        // ── حذف رسائل البوت بالتفاعل ─────────────────────────────
+        if (type === 'message_reaction' && messageReply?.senderID === api.getCurrentUserID()) {
+            const deleteReactions = ['👍', '😡', '🗑️', '❌', '💔', '🚫', '⛔'];
             if (deleteReactions.includes(reaction)) {
-                try {
-                    await api.unsendMessage(messageReply.messageID);
-                    if (DeveloperMode) logger(`🗑️ حذف رسالة: ${messageReply.messageID}`, "EVENT");
-                } catch (err) {
+                try { await api.unsendMessage(messageReply.messageID); } catch (_) {
                     setTimeout(async () => {
                         try { await api.unsendMessage(messageReply.messageID); } catch (_) {}
                     }, 1000);
@@ -34,76 +28,53 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
             }
         }
 
-        // ════════════════════════════════════════════════════════════
-        // 🚫 فلترة المحظورين والـ Inbox
-        // ════════════════════════════════════════════════════════════
+        // ── فلترة المحظورين ───────────────────────────────────────
         if (
             userBanned.has(senderID) ||
             threadBanned.has(threadID) ||
-            (allowInbox == false && senderID == threadID)
+            (allowInbox == false && senderID === threadID)
         ) return;
 
-        // ════════════════════════════════════════════════════════════
-        // ⚙️ معالجة الأحداث
-        // ════════════════════════════════════════════════════════════
-
-        // ✅ الإصلاح: event.type لما يكون "event" يعني هو log event
-        // فلازم ناخذ logMessageType اللي جوّاه مثل "log:subscribe"
-        // بدل ما ناخذ "event" اللي ما يطابق أي eventType في الملفات
-        const currentEventType = (event.type === "event")
+        // ── تحديد نوع الحدث الفعلي ───────────────────────────────
+        // event.type = "event" → الحدث الحقيقي في logMessageType
+        const currentEventType = (type === 'event')
             ? event.logMessageType
-            : event.type;
+            : type;
 
-        let processedEvents = 0;
+        if (!currentEventType) return;
 
-        if (DeveloperMode) {
-            logger(`📊 Event: ${currentEventType} | Thread: ${threadID} | Events: ${events.size}`, "EVENT DEBUG");
-        }
+        let processed = 0;
 
         for (const [eventName, eventModule] of events.entries()) {
-            if (!eventModule.config?.eventType) {
-                if (DeveloperMode) logger(`⚠️ ${eventName}: مفقود eventType`, "EVENT");
-                continue;
-            }
-
-            if (!eventModule.config.eventType.includes(currentEventType)) continue;
+            const eventTypes = eventModule.config?.eventType;
+            if (!Array.isArray(eventTypes)) continue;
+            if (!eventTypes.includes(currentEventType)) continue;
 
             try {
                 const Obj = { api, event, models, Users, Threads, Currencies };
 
-                if (typeof eventModule.run === "function") {
+                if (typeof eventModule.run === 'function') {
                     await eventModule.run(Obj);
-                } else if (typeof eventModule.handleEvent === "function") {
+                } else if (typeof eventModule.handleEvent === 'function') {
                     await eventModule.handleEvent(Obj);
-                } else {
-                    logger(`⚠️ Event ${eventName} لا يحتوي على run أو handleEvent`, "EVENT");
-                    continue;
                 }
 
-                processedEvents++;
+                processed++;
 
                 if (DeveloperMode) {
                     logger(
-                        `✅ Event: ${eventName} | Type: ${currentEventType} | ${Date.now() - timeStart}ms`,
-                        "EVENT"
+                        `✅ ${eventName} | ${currentEventType} | ${Date.now() - timeStart}ms`,
+                        '[ EVENT ]'
                     );
                 }
             } catch (error) {
-                logger(`❌ خطأ في Event [${eventName}]: ${error.message}`, "error");
+                logger(`❌ Event [${eventName}]: ${error.message}`, 'error');
                 if (DeveloperMode) console.error(error.stack);
             }
         }
 
-        if (DeveloperMode) {
-            const total = Date.now() - timeStart;
-            logger(
-                processedEvents > 0
-                    ? `✅ معالجة ${processedEvents} events في ${total}ms`
-                    : `ℹ️ لم يُعالَج أي event لنوع: ${currentEventType}`,
-                "EVENT"
-            );
+        if (DeveloperMode && processed === 0) {
+            logger(`ℹ️ لا يوجد handler لـ: ${currentEventType}`, '[ EVENT ]');
         }
-
-        return;
     };
 };
