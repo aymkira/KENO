@@ -373,7 +373,8 @@ function onBot({ models: botModel }) {
 
             function listenerCallback(error, message) {
                 if (error) {
-                    // ① إعادة اتصال عند خطأ الاستماع
+                    // تجاهل stop_listen — listenMqtt يعيد نفسه تلقائياً
+                    if (error?.type === "stop_listen") return;
                     logger(`⚠️ listenMqtt error: ${JSON.stringify(error)}`, '[ LISTEN ]');
                     return reconnect('listen error');
                 }
