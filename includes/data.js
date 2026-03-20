@@ -146,6 +146,7 @@ const BANS_FILE     = 'user/bans.json';
 const HISTORY_FILE  = 'user/history.json';
 const THREADS_FILE  = 'group/threads.json';
 const ANALYSIS_FILE = 'user/analysis.json';
+const KICKED_FILE   = 'user/kicked.json';
 
 // جلب مستخدم
 async function getUser(userID) {
@@ -339,6 +340,62 @@ async function getAllBans() {
 }
 
 // ═══════════════════════════════════════════════════════
+//  ③-b kicked.json — المطرودون الدائمون
+// ═══════════════════════════════════════════════════════
+async function kickUser(userID, reason = '', kickedBy = '') {
+  const db = await loadFile(KICKED_FILE);
+  const id = String(userID);
+  db[id] = {
+    userID: id,
+    reason,
+    kickedBy: String(kickedBy),
+    kickedAt: now(),
+  };
+  _cache[KICKED_FILE].data = db;
+  _dirty.add(KICKED_FILE);
+  await saveFile(KICKED_FILE, `kick user ${id}`);
+
+  // تحديث الذاكرة
+  if (!global._kickedUsers) global._kickedUsers = new Map();
+  global._kickedUsers.set(id, db[id]);
+  return db[id];
+}
+
+async function unkickUser(userID) {
+  const db = await loadFile(KICKED_FILE);
+  const id = String(userID);
+  if (!db[id]) return false;
+  delete db[id];
+  _cache[KICKED_FILE].data = db;
+  _dirty.add(KICKED_FILE);
+  await saveFile(KICKED_FILE, `unkick user ${id}`);
+  global._kickedUsers?.delete(id);
+  return true;
+}
+
+async function getKick(userID) {
+  const db = await loadFile(KICKED_FILE);
+  return db[String(userID)] || null;
+}
+
+async function getAllKicked() {
+  const db = await loadFile(KICKED_FILE);
+  return Object.values(db);
+}
+
+// تحميل المطرودين للذاكرة عند بدء التشغيل
+;(async () => {
+  try {
+    if (!global._kickedUsers) global._kickedUsers = new Map();
+    const db = await loadFile(KICKED_FILE);
+    for (const [id, data] of Object.entries(db))
+      global._kickedUsers.set(id, data);
+    if (Object.keys(db).length)
+      console.log(`[DATA] 🚫 تم تحميل ${Object.keys(db).length} مطرود للذاكرة`);
+  } catch(_) {}
+})();
+
+// ═══════════════════════════════════════════════════════
 //  ④ history.json — سجل الأحداث
 // ═══════════════════════════════════════════════════════
 async function logEvent(type, data) {
@@ -494,6 +551,9 @@ module.exports = {
   // ── حظر ──
   banUser, unbanUser, getBan, getAllBans,
 
+  // ── طرد دائم ──
+  kickUser, unkickUser, getKick, getAllKicked,
+
   // ── مجموعات ──
   getThread, setThread, banThread, unbanThread,
 
@@ -511,5 +571,5 @@ module.exports = {
   getAnalysis, setAnalysis, getAllAnalysis,
 
   // ── ثوابت ──
-  FILES: { USERS: USERS_FILE, WALLET: WALLET_FILE, BANS: BANS_FILE, HISTORY: HISTORY_FILE, THREADS: THREADS_FILE, ANALYSIS: ANALYSIS_FILE },
+  FILES: { USERS: USERS_FILE, WALLET: WALLET_FILE, BANS: BANS_FILE, HISTORY: HISTORY_FILE, THREADS: THREADS_FILE, ANALYSIS: ANALYSIS_FILE, KICKED: KICKED_FILE },
 };
