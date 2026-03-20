@@ -397,16 +397,28 @@ function onBot({ models: botModel }) {
                 }
             }, 30 * 60 * 1000);
 
-            // ── keep-alive: يحافظ على الـ session حياً كل 15 دقيقة ──
+            // ── keep-alive خفيف: markAsReadAll كل 10 دقائق بدل getFriendsList الثقيل ──
             setInterval(() => {
                 try {
-                    api.getFriendsList(() => {
-                        logger('💓 keep-alive ✅', '[ SESSION ]');
+                    api.markAsReadAll((err) => {
+                        if (!err) logger('💓 keep-alive ✅', '[ SESSION ]');
                     });
                 } catch(e) {
                     logger(`💓 keep-alive فشل: ${e.message}`, '[ SESSION ]');
                 }
-            }, 15 * 60 * 1000);
+            }, 10 * 60 * 1000);
+
+            // ── تجديد fb_dtsg كل 24 ساعة يمنع "Please re-open browser" ──
+            setInterval(() => {
+                try {
+                    api.refreshFb_dtsg((err, res) => {
+                        if (!err) logger('🔑 fb_dtsg جُدِّد ✅', '[ SESSION ]');
+                        else logger(`🔑 fb_dtsg فشل: ${err.message || err}`, '[ SESSION ]');
+                    });
+                } catch(e) {
+                    logger(`🔑 fb_dtsg error: ${e.message}`, '[ SESSION ]');
+                }
+            }, 24 * 60 * 60 * 1000);
 
             // ── إشعار التشغيل ──────────────────────────────────────
             const momentt = require("moment-timezone").tz("Asia/Baghdad");
