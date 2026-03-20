@@ -11,60 +11,49 @@ function loadConfig() {
 module.exports.config = {
   name:        "antibd",
   eventType:   ["log:user-nickname"],
-  version:     "1.0.0",
+  version:     "2.0.0",
   credits:     "ayman",
-  description: "حماية كنية البوت والمطور من التغيير",
+  description: "حماية كنية البوت والمطور — تفاعل 🚫 فقط",
 };
 
-module.exports.run = async function({ api, event, Users, Threads }) {
-  const { logMessageData, threadID, author } = event;
-  const { participant_id, nickname } = logMessageData;
+module.exports.run = async function({ api, event, Threads }) {
+  const { logMessageData, threadID, messageID, author } = event;
+  const { participant_id } = logMessageData;
+
   const CFG      = loadConfig();
   const ADMINBOT = (CFG.ADMINBOT || []).map(String);
   const BOTNAME  = CFG.BOTNAME || "KIRA";
   const botID    = String(api.getCurrentUserID());
+  const authorID = String(author);
 
-  // لو المطور غيّر — مقبول
-  if (ADMINBOT.includes(String(author))) return;
+  // المطور غيّر — مقبول
+  if (ADMINBOT.includes(authorID)) return;
+
+  const target = String(participant_id);
 
   // ── حماية كنية البوت ──────────────────────────────────────────
-  if (String(participant_id) === botID) {
-    // استرجع الكنية الصحيحة للبوت
+  if (target === botID) {
     let correctNick = BOTNAME;
     try {
       const td = await Threads.getData(threadID);
       if (td?.data?.botNickname) correctNick = td.data.botNickname;
     } catch(_) {}
 
-    // أعد الكنية
     api.changeNickname(correctNick, threadID, botID);
-
-    // أشعر المجموعة
-    const changerName = await Users.getNameUser(author).catch(() => author);
-    return api.sendMessage(
-      `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗨𝗔𝗥𝗗 ━━ ⌬\n\n🛡️ محاولة تغيير كنية البوت!\n👤 ${changerName}\n🔄 تم الاسترجاع: ${correctNick}`,
-      threadID
-    );
+    try { api.setMessageReaction("🚫", messageID, () => {}, true); } catch(_) {}
+    return;
   }
 
   // ── حماية كنية المطورين ───────────────────────────────────────
-  if (ADMINBOT.includes(String(participant_id))) {
-    // استرجع الكنية الصحيحة للمطور
+  if (ADMINBOT.includes(target)) {
     let devNick = null;
     try {
       const td = await Threads.getData(threadID);
-      devNick  = td?.data?.devNicknames?.[String(participant_id)] || null;
+      devNick  = td?.data?.devNicknames?.[target] || null;
     } catch(_) {}
 
-    if (devNick) {
-      api.changeNickname(devNick, threadID, participant_id);
-    }
-
-    const changerName = await Users.getNameUser(author).catch(() => author);
-    const devName     = await Users.getNameUser(participant_id).catch(() => participant_id);
-    return api.sendMessage(
-      `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗨𝗔𝗥𝗗 ━━ ⌬\n\n🛡️ محاولة تغيير كنية المطور!\n👤 المحاول: ${changerName}\n👑 المطور: ${devName}${devNick ? `\n🔄 تم الاسترجاع: ${devNick}` : ""}`,
-      threadID
-    );
+    if (devNick) api.changeNickname(devNick, threadID, target);
+    try { api.setMessageReaction("🚫", messageID, () => {}, true); } catch(_) {}
+    return;
   }
 };
