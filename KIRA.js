@@ -156,13 +156,21 @@ function onBot({ models: botModel }) {
     let _saveInterval = null;
     let _reconnecting = false;
 
+    let _reconnectDelay = 5000;   // يبدأ بـ 5 ثواني
+    const _maxDelay     = 60000;  // حد أقصى 60 ثانية
+
     // ── reconnect helper ─────────────────────────────────────────
     function reconnect(reason) {
         if (_reconnecting) return;
         _reconnecting = true;
         if (_saveInterval) { clearInterval(_saveInterval); _saveInterval = null; }
-        logger(`🔄 reconnect: ${reason}`, '[ SESSION ]');
-        setTimeout(() => { _reconnecting = false; tryLogin(); }, 5000);
+        logger(`🔄 reconnect بعد ${_reconnectDelay/1000}s: ${reason}`, '[ SESSION ]');
+        setTimeout(() => {
+            _reconnecting = false;
+            // exponential backoff: كل فشل يضاعف الوقت حتى الـ max
+            _reconnectDelay = Math.min(_reconnectDelay * 2, _maxDelay);
+            tryLogin();
+        }, _reconnectDelay);
     }
 
     // ── tryLogin ─────────────────────────────────────────────────
@@ -206,7 +214,16 @@ function onBot({ models: botModel }) {
             }
 
             _loginAttempt = 0;
+            _reconnectDelay = 5000; // إعادة ضبط الـ backoff بعد نجاح login
             logger('✅ تم تسجيل الدخول!', '[ LOGIN ]');
+
+            // ── dongdev: استمع لأحداث الـ session ─────────────────
+            api.on('sessionExpired', () => {
+                logger('⚠️ Session منتهية — @dongdev يعيد تسجيل الدخول تلقائياً...', '[ SESSION ]');
+            });
+            api.on('autoLoginSuccess', () => {
+                logger('✅ @dongdev: auto-login نجح — البوت يعمل من جديد', '[ SESSION ]');
+            });
 
             // ① دمج autoReconnect مع FCAOption
             api.setOptions({
@@ -385,19 +402,22 @@ function onBot({ models: botModel }) {
 
             global.handleListen = api.listenMqtt(listenerCallback);
 
-            // ── حفظ appState كل 30 دقيقة ──────────────────────────
+            // ── حفظ appState كل 15 دقيقة (كان 30) — يحافظ على الـ session طازجة ──
             _saveInterval = setInterval(() => {
                 try {
                     const newState = api.getAppState();
                     writeFileSync(appStateFile, JSON.stringify(newState, null, '\x09'));
-                    logger('💾 appState محفوظ محلياً', '[ SESSION ]');
+                    // تحديث appState في الذاكرة أيضاً للـ reconnect القادم
+                    appState = newState;
+                    loginData['appState'] = newState;
+                    logger('💾 appState محفوظ ومُحدَّث ✅', '[ SESSION ]');
                     pushAppStateToGitHub(newState);
                 } catch(e) {
                     logger(`⚠️ فشل حفظ appState: ${e.message}`, '[ SESSION ]');
                 }
-            }, 30 * 60 * 1000);
+            }, 15 * 60 * 1000);
 
-            // ── keep-alive خفيف: markAsReadAll كل 10 دقائق بدل getFriendsList الثقيل ──
+            // ── keep-alive: markAsReadAll كل 8 دقائق ──
             setInterval(() => {
                 try {
                     api.markAsReadAll((err) => {
@@ -406,19 +426,22 @@ function onBot({ models: botModel }) {
                 } catch(e) {
                     logger(`💓 keep-alive فشل: ${e.message}`, '[ SESSION ]');
                 }
-            }, 10 * 60 * 1000);
+            }, 8 * 60 * 1000);
 
-            // ── تجديد fb_dtsg كل 24 ساعة يمنع "Please re-open browser" ──
-            setInterval(() => {
+            // ── فحص صحة الـ session كل ساعة — إذا ماتت يعيد login فوراً ──
+            setInterval(async () => {
                 try {
-                    api.refreshFb_dtsg((err, res) => {
-                        if (!err) logger('🔑 fb_dtsg جُدِّد ✅', '[ SESSION ]');
-                        else logger(`🔑 fb_dtsg فشل: ${err.message || err}`, '[ SESSION ]');
+                    await new Promise((res, rej) => {
+                        api.getUserInfo(api.getCurrentUserID(), (err) => err ? rej(err) : res());
                     });
+                    logger('🩺 Session سليمة ✅', '[ SESSION ]');
                 } catch(e) {
-                    logger(`🔑 fb_dtsg error: ${e.message}`, '[ SESSION ]');
+                    logger(`🩺 Session ماتت: ${e.message} — إعادة login...`, '[ SESSION ]');
+                    reconnect('session health check failed');
                 }
-            }, 24 * 60 * 60 * 1000);
+            }, 60 * 60 * 1000);
+
+            // ── تجديد fb_dtsg يتولاه @dongdev داخلياً عبر autoLogin ──
 
             // ── إشعار التشغيل ──────────────────────────────────────
             const momentt = require("moment-timezone").tz("Asia/Baghdad");
