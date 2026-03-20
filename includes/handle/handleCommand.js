@@ -13,6 +13,10 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         DEVELOPER: "⌬ ━━ 𝗞𝗜𝗥𝗔 𝗗𝗘𝗩𝗘𝗟𝗢𝗣𝗘𝗥 ━━ ⌬",
     };
 
+    // ── كاش حظر المجموعات في الذاكرة (بدل GitHub call كل رسالة) ──
+    // يُحدَّث عند ban/unban فقط عبر data.js مباشرة
+    // global.data.threadBanned هو المصدر الوحيد للحقيقة
+
     return async function ({ event }) {
         const dateNow = Date.now();
         const time    = moment.tz("Asia/Baghdad").format("HH:mm:ss DD/MM/YYYY");
@@ -27,22 +31,21 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         senderID = String(senderID);
         threadID = String(threadID);
 
-        // ── لوج مبسط ─────────────────────────────────────────────────
         const _log = (type, detail) => {
             if (!DeveloperMode) return;
             const t = moment.tz("Asia/Baghdad").format("HH:mm:ss");
             logger(`[CMD] ${type} | ${senderID} | ${threadID} | ${detail} | ${t}`, "[ CMD ]");
         };
 
-        // ── DM (inbox) ────────────────────────────────────────────
+        // ── DM ────────────────────────────────────────────────────
         const isDM = senderID === threadID;
         if (isDM && allowInbox == false) return;
 
-        // ── البادئة ────────────────────────────────────────────────
+        // ── البادئة ───────────────────────────────────────────────
         const threadSetting = threadData.get(threadID) || {};
-        const prefix  = threadSetting.hasOwnProperty("PREFIX") ? threadSetting.PREFIX : PREFIX;
-        const botID   = api.getCurrentUserID();
-        const prefixRegex = new RegExp(`^(<@!?${botID}>|${escapeRegex(prefix)})\\s*`);
+        const prefix        = threadSetting.hasOwnProperty("PREFIX") ? threadSetting.PREFIX : PREFIX;
+        const botID         = api.getCurrentUserID();
+        const prefixRegex   = new RegExp(`^(<@!?${botID}>|${escapeRegex(prefix)})\\s*`);
         const [matchedPrefix] = body.match(prefixRegex) || [null];
         if (!matchedPrefix) return;
 
@@ -50,32 +53,20 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         const commandName = args.shift().toLowerCase();
         var command       = commands.get(commandName);
 
-        // ── فلاتر الحظر ───────────────────────────────────────────
+        // ── فلاتر الحظر (كلها من الذاكرة — صفر GitHub calls) ─────
         if (!ADMINBOT.includes(senderID)) {
 
-            // فحص حظر المجموعة
-            let isThreadBanned = threadBanned.has(threadID);
-            if (!isThreadBanned && !isDM) {
-                try {
-                    const dataJS = require(path.join(__dirname, "../../includes/data.js"));
-                    const rec    = await dataJS.loadFile("group/threads.json");
-                    const tr     = rec[threadID];
-                    if (tr?.banned) {
-                        isThreadBanned = true;
-                        global.data.threadBanned.set(threadID, { reason: tr.reason || "", dateAdded: tr.bannedAt || "" });
-                    }
-                } catch(_) {}
-            }
-            if (isThreadBanned) return;
+            // حظر المجموعة — من global.data.threadBanned فقط
+            if (threadBanned.has(threadID)) return;
 
-            // فحص حظر المستخدم
+            // حظر المستخدم
             if (userBanned.has(senderID)) {
                 try { api.setMessageReaction("🚫", messageID, () => {}, true); } catch(_) {}
                 return;
             }
 
-            if (YASSIN   === "true") return;
-            if (adminOnly)           return;
+            if (YASSIN === "true") return;
+            if (adminOnly)        return;
         }
 
         // ── restrictList ──────────────────────────────────────────
@@ -89,7 +80,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
             }
         } catch(_) {}
 
-        // ── البحث عن أقرب أمر ─────────────────────────────────────
+        // ── البحث عن أقرب أمر ────────────────────────────────────
         if (!command) {
             const allNames = Array.from(commands.keys());
             if (!allNames.length) return;
@@ -130,7 +121,6 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         if (ADMINBOT.includes(senderID)) {
             permssion = 2;
         } else if (!isDM) {
-            // فحص أدمن المجموعة فقط لو مش DM
             try {
                 const tInfo = threadInfo.get(threadID) || (await Threads.getInfo(threadID));
                 if (tInfo.adminIDs?.find(el => el.id == senderID)) permssion = 1;
@@ -143,14 +133,14 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
                 threadID, messageID
             );
 
-        // ── Cooldown ───────────────────────────────────────────────
+        // ── Cooldown ──────────────────────────────────────────────
         if (!cooldowns.has(command.config.name)) cooldowns.set(command.config.name, new Map());
         const timestamps     = cooldowns.get(command.config.name);
         const expirationTime = (command.config.cooldowns || 1) * 1000;
         if (timestamps.has(senderID) && dateNow < timestamps.get(senderID) + expirationTime)
             return api.setMessageReaction("⏳", messageID, () => {}, true);
 
-        // ── getText ────────────────────────────────────────────────
+        // ── getText ───────────────────────────────────────────────
         let getText2 = () => {};
         if (command.languages?.[global.config.language]) {
             getText2 = (...values) => {
