@@ -68,7 +68,7 @@
     "discord.js": "^14.16.3",
     "@distube/ytdl-core": "^4.16.12",
     "docx": "^9.6.1",
-    "@dongdev/fca-unofficial": "^3.0.31",
+    "@dongdev/fca-unofficial": "^latest",
     "dotenv": "^17.3.1",
     "dropbox-v2-api": "^2.5.12",
     "emoji-name-map": "^2.0.3",
