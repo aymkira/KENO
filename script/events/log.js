@@ -1,79 +1,95 @@
+const moment = require("moment-timezone");
+
 module.exports.config = {
-    name: "log",
-    eventType: ["log:unsubscribe", "log:subscribe", "log:thread-name"],
-    version: "1.0.0",
-    credits: "𝐊𝐈𝐓𝐄 凧",
-    description: "Record bot activity notifications!",
-    envConfig: {
-      enable: true
+  name:      "log",
+  eventType: ["log:unsubscribe", "log:subscribe", "log:thread-name"],
+  version:   "2.0.0",
+  credits:   "ayman",
+  description: "تقرير نشاط البوت للمطور",
+  envConfig: {
+    enable: true,
+  },
+};
+
+module.exports.run = async function({ api, event, Users, Threads }) {
+  const cfg = global.configModule?.log || {};
+  if (cfg.enable === false) return;
+
+  const { threadID, logMessageType, logMessageData, author, senderID } = event;
+  const botID = String(api.getCurrentUserID());
+  const time  = moment.tz("Asia/Baghdad").format("D/MM/YYYY HH:mm:ss");
+
+  // ── اسم الكروب من الذاكرة (بدون getThreadInfo) ───────────────
+  const nameThread = global.data.threadInfo.get(String(threadID))?.threadName
+    || (await Threads.getData(threadID).catch(() => null))?.threadInfo?.threadName
+    || String(threadID);
+
+  // ── اسم الشخص ─────────────────────────────────────────────────
+  const nameUser = global.data.userName.get(String(author))
+    || await Users.getNameUser(author).catch(() => String(author));
+
+  let task = "";
+
+  switch (logMessageType) {
+
+    // ── تغيير اسم المجموعة ───────────────────────────────────────
+    case "log:thread-name": {
+      const newName = logMessageData.name || "—";
+      await Threads.setData(threadID, { name: newName }).catch(() => {});
+      // لا نرسل تقرير لتغيير الاسم — مو مهم للمطور
+      return;
     }
-  };
-  
-  module.exports.run = async function ({ api, event, Users, Threads }) {
-    const logger = require("../../utils/log");
-    if (!global.configModule[this.config.name].enable) return;
-    let botID = api.getCurrentUserID();
-    var allThreadID = global.data.allThreadID;
-    for (const singleThread of allThreadID) {
-      const thread = global.data.threadData.get(singleThread) || {};
-      if (typeof thread["log"] != "undefined" && thread["log"] == false) return;
+
+    // ── إضافة البوت لكروب ─────────────────────────────────────────
+    case "log:subscribe": {
+      const added = logMessageData.addedParticipants || [];
+      if (added.some(i => String(i.userFbId) === botID)) {
+        task = "أضاف البوت لمجموعة جديدة ✅";
+      }
+      break;
     }
-    
-    const moment = require("moment-timezone");
-    const time = moment.tz("africa/morocco").format("D/MM/YYYY HH:mm:ss");
-    //let nameThread = (await Threads.getData(event.threadID)).threadInfo.threadName || "Tên không tồn tại";
-    let nameThread = global.data.threadInfo.get(event.threadID).threadName || "Name does not exist"; 
-  
-    let threadInfo = await api.getThreadInfo(event.threadID);
-    nameThread =threadInfo.threadName;
-    const nameUser = global.data.userName.get(event.author) || await Users.getNameUser(event.author);
-  
-    console.log(nameThread)
-  
-    var formReport = "[⚜️] إشعار هام [⚜️]" +
-      "\n\n[⚜️] إسم المجموعة: " + nameThread +
-      "\n[⚜️] ID المجموعة: " + event.threadID +
-      "\n[⚜️] الفعل: {task}" +
-      "\n[⚜️] اسم المستخدم: " + nameUser +
-      "\n[⚜️] ID المستخدم: " + event.author +
-      "\n\n[⚜️] الوقت: " + time + "",
-      task = "";
-    switch (event.logMessageType) {
-      case "log:thread-name": {
-          newName = event.logMessageData.name || "Name does not exist";
-          //task = "Người dùng thay đổi tên nhóm thành " + newName + "";
-          await Threads.setData(event.threadID, {name: newName});
-          break;
+
+    // ── طرد البوت من كروب ─────────────────────────────────────────
+    case "log:unsubscribe": {
+      const leftID = String(logMessageData.leftParticipantFbId || "");
+      if (leftID !== botID) return;
+      if (String(senderID) === botID) return; // البوت خرج بنفسه
+
+      task = "طُرد البوت من المجموعة ❌";
+
+      // حظر الكروب تلقائياً
+      try {
+        const td   = await Threads.getData(threadID);
+        const data = td?.data || {};
+        data.banned    = true;
+        data.reason    = "طرد البوت من المجموعة";
+        data.dateAdded = time;
+        await Threads.setData(threadID, { data });
+        global.data.threadBanned.set(String(threadID), {
+          reason:    data.reason,
+          dateAdded: data.dateAdded,
+        });
+      } catch(e) {
+        console.error("[log] فشل حظر الكروب:", e.message);
       }
-      case "log:subscribe": {
-        if (event.logMessageData.addedParticipants.some(i => i.userFbId == botID)) task = "[⚜️] هذا المستخدم اضاف البوت لمجموعة جديدة";
-        break;
-      }
-      case "log:unsubscribe": {
-        if (event.logMessageData.leftParticipantFbId == botID) {
-          if(event.senderID == botID) return;
-          const data = (await Threads.getData(event.threadID)).data || {};
-          data.banned = true;
-          var reason = "[⚜️] استخدم البوت بشكل مكثف دون اذن 🚫";
-          data.reason = reason || null;
-          data.dateAdded = time;
-          await Threads.setData(event.threadID, { data });
-          global.data.threadBanned.set(event.threadID, { reason: data.reason, dateAdded: data.dateAdded });
-  
-          task = "[⚜️] المستخدم قام بطرد البوت من المجموعة"
-        }
-        break;
-      }
-      default:
-        break;
+      break;
     }
-  
-    if (task.length == 0) return;
-  
-    formReport = formReport
-      .replace(/\{task}/g, task);
-  
-    return api.sendMessage(formReport, global.config.ADMINBOT[0], (error, info) => {
-      if (error) return logger(formReport, "Logging Event");
-    });
+
+    default: return;
   }
+
+  if (!task) return;
+
+  const report =
+    `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗟𝗢𝗚 ━━ ⌬\n\n` +
+    `📋 الفعل: ${task}\n` +
+    `🏠 المجموعة: ${nameThread}\n` +
+    `🆔 ID: ${threadID}\n` +
+    `👤 المستخدم: ${nameUser}\n` +
+    `🆔 ID: ${author}\n` +
+    `🕐 الوقت: ${time}`;
+
+  return api.sendMessage(report, global.config.ADMINBOT[0], (err) => {
+    if (err) console.error("[log] فشل إرسال التقرير:", err);
+  });
+};
