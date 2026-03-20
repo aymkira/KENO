@@ -14,7 +14,7 @@ const { readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync, unlinkS
 const { join, resolve } = require("path");
 const { execSync } = require('child_process');
 const logger    = require("./utils/log.js");
-const login     = require("@dongdev/fca-unofficial");
+const login     = require("ws3-fca");
 const axios     = require("axios");
 const https     = require("https");
 const listPackage        = JSON.parse(readFileSync('./package.json')).dependencies;
