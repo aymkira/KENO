@@ -1,0 +1,21 @@
+# ══ أسرار وحساسيات ══
+.env
+appstate.json
+config.json
+*.temp
+
+# ══ بيانات قاعدة البيانات ══
+*.sqlite
+*.db
+/script/commands/cache/
+/script/commands/data/
+/modules/commands/cache/
+
+# ══ Node ══
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ══ OS ══
+.DS_Store
+Thumbs.db
