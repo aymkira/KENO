@@ -1178,8 +1178,10 @@ function parseAndCheckLogin(ctx, http, retryCount) {
 			}
 
 			if (res.error === 1357001) {
-				const err = new Error('Facebook blocked login. Please visit https://facebook.com and check your account.');
+				// خطأ مؤقت من فيسبوك — نرجع خطأ ناعم بدل إيقاف البوت
+				const err = new Error('Facebook temporary block. Will retry.');
 				err.error = "Not logged in.";
+				err.type  = "temporary_block";
 				throw err;
 			}
 			return res;
