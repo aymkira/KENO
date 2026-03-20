@@ -439,33 +439,57 @@ function onBot({ models: botModel }) {
 
             global.handleListen = api.listenMqtt(listenerCallback);
 
-            // ── حفظ appState كل 15 دقيقة (كان 30) — يحافظ على الـ session طازجة ──
+            // ══════════════════════════════════════════════════════
+            // 🛡️ نظام الحماية من تسجيل الخروج
+            // ══════════════════════════════════════════════════════
+
+            // ① حفظ appState كل 10 دقائق + تحديث الذاكرة
             _saveInterval = setInterval(() => {
                 try {
                     const newState = api.getAppState();
+                    if (!newState || newState.length === 0) return;
                     writeFileSync(appStateFile, JSON.stringify(newState, null, '\x09'));
-                    // تحديث appState في الذاكرة أيضاً للـ reconnect القادم
                     appState = newState;
                     loginData['appState'] = newState;
-                    logger('💾 appState محفوظ ومُحدَّث ✅', '[ SESSION ]');
+                    logger('💾 appState محفوظ ✅', '[ SESSION ]');
                     pushAppStateToGitHub(newState);
                 } catch(e) {
                     logger(`⚠️ فشل حفظ appState: ${e.message}`, '[ SESSION ]');
                 }
-            }, 15 * 60 * 1000);
+            }, 10 * 60 * 1000);
 
-            // ── keep-alive: markAsReadAll كل 8 دقائق ──
+            // ② keep-alive نشط كل 5 دقائق — يضمن الـ session لا تموت
             setInterval(() => {
                 try {
-                    api.markAsReadAll((err) => {
-                        if (!err) logger('💓 keep-alive ✅', '[ SESSION ]');
-                    });
-                } catch(e) {
-                    logger(`💓 keep-alive فشل: ${e.message}`, '[ SESSION ]');
-                }
-            }, 8 * 60 * 1000);
+                    // markAsReadAll يجدد الـ cookies تلقائياً
+                    api.markAsReadAll(() => {});
+                } catch(_) {}
+            }, 5 * 60 * 1000);
 
-            // ── فحص صحة الـ session كل ساعة — إذا ماتت يعيد login فوراً ──
+            // ③ تجديد cookies نشط كل 20 دقيقة عبر طلب حقيقي لـ Facebook
+            setInterval(async () => {
+                try {
+                    await new Promise((res, rej) => {
+                        api.getUserInfo(api.getCurrentUserID(), (err, data) => {
+                            if (err) return rej(err);
+                            res(data);
+                        });
+                    });
+                    // بعد كل طلب ناجح احفظ الـ appState المحدَّث فوراً
+                    const refreshed = api.getAppState();
+                    if (refreshed && refreshed.length > 0) {
+                        writeFileSync(appStateFile, JSON.stringify(refreshed, null, '\x09'));
+                        appState = refreshed;
+                        loginData['appState'] = refreshed;
+                        logger('🔄 Cookies مجدَّدة ✅', '[ SESSION ]');
+                    }
+                } catch(e) {
+                    logger(`🔄 تجديد Cookies فشل: ${e.message} — إعادة login...`, '[ SESSION ]');
+                    reconnect('cookie refresh failed');
+                }
+            }, 20 * 60 * 1000);
+
+            // ④ فحص صحة Session كل ساعة — خط دفاع أخير
             setInterval(async () => {
                 try {
                     await new Promise((res, rej) => {
@@ -477,8 +501,6 @@ function onBot({ models: botModel }) {
                     reconnect('session health check failed');
                 }
             }, 60 * 60 * 1000);
-
-            // ── تجديد fb_dtsg يتولاه @dongdev داخلياً عبر autoLogin ──
 
             // ── إشعار التشغيل ──────────────────────────────────────
             const momentt = require("moment-timezone").tz("Asia/Baghdad");
