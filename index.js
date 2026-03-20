@@ -56,7 +56,7 @@ app.get("/", (req, res) => {
   const prefix   = global.config?.PREFIX         || ".";
   const userCount  = global.data?.allUserID?.length  || 0;
   const groupCount = global.data?.allThreadID?.length || 0;
-  const timeNow  = moment().tz("Africa/Casablanca").format("HH:mm:ss • DD/MM/YYYY");
+  const timeNow  = moment().tz("Asia/Baghdad").format("HH:mm:ss • DD/MM/YYYY");
   const pad = n => String(n).padStart(2, "0");
 
   res.send(`<!DOCTYPE html>
