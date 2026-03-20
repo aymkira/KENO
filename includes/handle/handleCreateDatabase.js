@@ -1,8 +1,10 @@
 module.exports = function ({ Users, Threads, Currencies }) {
     const logger = require("../../utils/log.js");
     const chalk  = require("chalk");
-    const moment   = require("moment-timezone");
-    const _dbLog   = (type, detail) => {
+    const moment = require("moment-timezone");
+    const path   = require("path");
+
+    const _log = (type, detail) => {
         if (!global.config?.DeveloperMode) return;
         const t = moment.tz("Asia/Baghdad").format("HH:mm:ss");
         logger(`[DB] ${type} | ${detail} | ${t}`, "[ DATABASE ]");
@@ -16,24 +18,31 @@ module.exports = function ({ Users, Threads, Currencies }) {
     ];
     const randColor = () => "#" + COLORS[Math.floor(Math.random() * COLORS.length)];
 
-    // كاش يمنع طلبات getInfo المتكررة لنفس الكروب
+    // كاش المجموعات — يمنع getInfo المتكرر
     const recentThreads = new Map();
-    const THREAD_CACHE  = 5 * 60 * 1000; // 5 دقائق
+    const THREAD_CACHE  = 5 * 60 * 1000;
+
+    // جلب data.js مرة واحدة
+    let _db = null;
+    function getDB() {
+        if (!_db) _db = require(path.join(process.cwd(), "includes", "data.js"));
+        return _db;
+    }
 
     return async function ({ event }) {
-        const { allUserID, allCurrenciesID, allThreadID, userName, threadInfo } = global.data;
+        const { allUserID, allThreadID, userName, threadInfo } = global.data;
         const { autoCreateDB } = global.config;
-
         if (!autoCreateDB) return;
 
+        const db       = getDB();
         const senderID = String(event.senderID);
         const threadID = String(event.threadID);
 
         try {
-            // ── إنشاء بيانات المجموعة ─────────────────────────────
-            const isGroup  = event.isGroup || senderID === threadID;
-            const isNew    = !allThreadID.includes(threadID);
-            const isStale  = (Date.now() - (recentThreads.get(threadID) || 0)) > THREAD_CACHE;
+            // ── مجموعة جديدة أو منتهية الكاش ─────────────────────
+            const isGroup = event.isGroup || senderID !== threadID;
+            const isNew   = !allThreadID.includes(threadID);
+            const isStale = (Date.now() - (recentThreads.get(threadID) || 0)) > THREAD_CACHE;
 
             if (isGroup && (isNew || isStale)) {
                 recentThreads.set(threadID, Date.now());
@@ -46,10 +55,14 @@ module.exports = function ({ Users, Threads, Currencies }) {
                         participantIDs: info.participantIDs,
                     };
 
+                    // حدّث threadInfo في الذاكرة دائماً
+                    threadInfo.set(threadID, dataThread);
+
                     if (isNew) {
                         allThreadID.push(threadID);
-                        threadInfo.set(threadID, dataThread);
-                        await Threads.setData(threadID, { threadInfo: dataThread, data: {} });
+                        // حفظ في data.js — يُجدول تلقائياً بدون GitHub call فوري
+                        await db.setThread(threadID, { threadInfo: dataThread });
+
                         const c1 = randColor(), c2 = randColor(), c3 = randColor();
                         logger(
                             chalk.hex(c1)("مجموعة جديدة: ") +
@@ -58,37 +71,33 @@ module.exports = function ({ Users, Threads, Currencies }) {
                             "[ THREAD ]"
                         );
 
-                        // أعضاء المجموعة
+                        // أعضاء المجموعة الجدد
                         for (const u of (info.userInfo || [])) {
                             const uid = String(u.id);
                             userName.set(uid, u.name);
-                            try {
-                                if (allUserID.includes(uid))
-                                    await Users.setData(uid, { name: u.name });
-                                else {
-                                    await Users.createData(uid, { name: u.name, data: {} });
-                                    allUserID.push(uid);
-                                }
-                            } catch(_) {}
+                            if (!allUserID.includes(uid)) {
+                                allUserID.push(uid);
+                                try { await db.ensureUser(uid, u.name); } catch(_) {}
+                            }
                         }
                     }
-                } catch(e) { console.error("[DB] thread:", e.message); }
+                } catch(e) { console.error("[DB] thread error:", e.message); }
             }
 
-            // ── إنشاء بيانات المستخدم ─────────────────────────────
+            // ── مستخدم جديد ───────────────────────────────────────
             if (!allUserID.includes(senderID) || !userName.has(senderID)) {
                 try {
                     const info = await Users.getInfo(senderID);
                     const name = info?.name || senderID;
-                    if (allUserID.includes(senderID))
-                        await Users.setData(senderID, { name });
-                    else {
-                        await Users.createData(senderID, { name, data: {} });
-                        allUserID.push(senderID);
-                    }
+
+                    if (!allUserID.includes(senderID)) allUserID.push(senderID);
                     userName.set(senderID, name);
+
+                    // ensureUser يعمل ensureWallet تلقائياً — نقطة واحدة للإنشاء
+                    await db.ensureUser(senderID, name);
+
                     const c1 = randColor(), c2 = randColor(), c3 = randColor();
-                    _dbLog("USER NEW", `${name} | ${senderID}`);
+                    _log("USER NEW", `${name} | ${senderID}`);
                     logger(
                         chalk.hex(c1)("مستخدم جديد: ") +
                         chalk.hex(c2)(name) + "  ||  " +
@@ -96,22 +105,13 @@ module.exports = function ({ Users, Threads, Currencies }) {
                         "[ USER ]"
                     );
                 } catch(e) {
+                    // fallback — سجّل بالـ ID
                     if (!allUserID.includes(senderID)) {
-                        try {
-                            await Users.createData(senderID, { name: senderID, data: {} });
-                            allUserID.push(senderID);
-                            userName.set(senderID, senderID);
-                        } catch(_) {}
+                        allUserID.push(senderID);
+                        userName.set(senderID, senderID);
+                        try { await db.ensureUser(senderID); } catch(_) {}
                     }
                 }
-            }
-
-            // ── إنشاء بيانات العملات ──────────────────────────────
-            if (!allCurrenciesID.includes(senderID)) {
-                try {
-                    await Currencies.createData(senderID, { data: {} });
-                    allCurrenciesID.push(senderID);
-                } catch(_) {}
             }
 
         } catch(err) {
