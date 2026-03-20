@@ -101,12 +101,20 @@ global.getText = function (...args) {
 };
 
 // ── appState ─────────────────────────────────────────────────────
-console.log(global.getText('mirai', 'foundPathAppstate'));
+var appStateFile = resolve(join(global.client.mainPath, global.config.APPSTATEPATH || "appstate.json"));
+var appState = [];
 try {
-    var appStateFile = resolve(join(global.client.mainPath, global.config.APPSTATEPATH || "appstate.json"));
-    var appState     = require(appStateFile);
-    logger.loader(global.getText("mirai", "foundPathAppstate"));
-} catch { return logger.loader(global.getText("mirai", "notFoundPathAppstate"), "error"); }
+    const raw = require(appStateFile);
+    // تحقق إن appstate فيه بيانات فعلية وليس فارغاً
+    appState = Array.isArray(raw) && raw.length > 0 ? raw : [];
+    if (appState.length > 0) {
+        logger.loader("✅ appstate موجود وصالح — سيتم تسجيل الدخول منه");
+    } else {
+        logger.loader("⚠️ appstate فارغ — سيتم تسجيل الدخول بالإيميل");
+    }
+} catch {
+    logger.loader("⚠️ appstate غير موجود — سيتم تسجيل الدخول بالإيميل");
+}
 
 // ── GitHub backup helper ──────────────────────────────────────────
 function pushAppStateToGitHub(state) {
@@ -151,7 +159,22 @@ function pushAppStateToGitHub(state) {
 // ── Main Bot Function ─────────────────────────────────────────────
 function onBot({ models: botModel }) {
     const loginData = {};
-    loginData['appState'] = appState;
+
+    // لو appstate صالح استخدمه، لو فارغ استخدم الإيميل
+    if (appState.length > 0) {
+        loginData['appState'] = appState;
+        logger('🔑 تسجيل الدخول عبر appstate', '[ LOGIN ]');
+    } else {
+        const email    = global.config.EMAIL    || "";
+        const password = global.config.PASSWORD || "";
+        if (!email || !password) {
+            logger('❌ appstate فارغ والإيميل غير موجود في config.json!', '[ LOGIN ]');
+            return;
+        }
+        loginData['email']    = email;
+        loginData['password'] = password;
+        logger(`🔑 تسجيل الدخول عبر الإيميل: ${email}`, '[ LOGIN ]');
+    }
     let _loginAttempt = 0;
     let _saveInterval = null;
     let _reconnecting = false;
@@ -214,8 +237,22 @@ function onBot({ models: botModel }) {
             }
 
             _loginAttempt = 0;
-            _reconnectDelay = 5000; // إعادة ضبط الـ backoff بعد نجاح login
+            _reconnectDelay = 5000;
             logger('✅ تم تسجيل الدخول!', '[ LOGIN ]');
+
+            // ── احفظ appstate فوراً بعد login (مهم لو كان عبر إيميل) ──
+            try {
+                const freshState = api.getAppState();
+                if (freshState && freshState.length > 0) {
+                    writeFileSync(appStateFile, JSON.stringify(freshState, null, '\x09'));
+                    appState = freshState;
+                    loginData['appState'] = freshState;
+                    logger('💾 appstate محفوظ بعد تسجيل الدخول ✅', '[ SESSION ]');
+                    pushAppStateToGitHub(freshState);
+                }
+            } catch(e) {
+                logger(`⚠️ فشل حفظ appstate: ${e.message}`, '[ SESSION ]');
+            }
 
             // ── dongdev: استمع لأحداث الـ session ─────────────────
             api.on('sessionExpired', () => {
