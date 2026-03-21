@@ -1,10 +1,11 @@
 {
-  "autoLogin": true,
-  "apiServer": "https://minhdong.site",
+  "autoUpdate": false,
+  "autoLogin": false,
+  "apiServer": "",
   "apiKey": "",
   "credentials": {
-    "email": "kk1000bot@gmail.com",
-    "password": "ayman2008?",
+    "email": "",
+    "password": "",
     "twofactor": ""
   }
 }
