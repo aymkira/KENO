@@ -198,7 +198,7 @@ function onBot() {
 
         login(loginData, { listenEvents: true, logLevel: "silent", pauseLog: true, userAgent: "Mozilla/5.0" }, async (err, api) => {
             if (err) {
-                logger(`❌ فشل تسجيل الدخول: ${JSON.stringify(err)}`, '[ LOGIN ]');
+                logger(`❌ فشل تسجيل الدخول: ${err?.message || err?.error || err?.stack || JSON.stringify(err) || "unknown"}`, '[ LOGIN ]');
                 return reconnect('login failed');
             }
 
