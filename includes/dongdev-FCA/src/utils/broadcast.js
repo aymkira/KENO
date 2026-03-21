@@ -1,51 +1,56 @@
+// ============================================================
+//  AYMAN-FCA — Broadcast
+//  مكتبة KIRA بوت | المطور: Ayman
+//  إرسال رسالة لمجموعات/أشخاص متعددين مع rate limiting
+// ============================================================
 "use strict";
 
 const logger = require("../../func/logger");
 
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+const delay = ms => new Promise(r => setTimeout(r, ms));
 
-async function broadcast(api, threadIDs, message, options) {
-  const opts = options || {};
-  const delayMs = typeof opts.delayMs === "number" ? opts.delayMs : 1000;
-  const skipBlocked = opts.skipBlocked !== false;
-  const onResult = typeof opts.onResult === "function" ? opts.onResult : null;
+async function broadcast(api, threadIDs, message, options = {}) {
+  const delayMs     = typeof options.delayMs === "number" ? options.delayMs : 1000;
+  const onResult    = typeof options.onResult === "function" ? options.onResult : null;
+  const retries     = typeof options.retries  === "number"  ? options.retries  : 1;
 
-  if (!api || typeof api.sendMessage !== "function") {
-    throw new Error("broadcast: api.sendMessage is required.");
-  }
+  if (!api?.sendMessage) throw new Error("broadcast: api.sendMessage مطلوب");
 
-  const ids = Array.isArray(threadIDs) ? threadIDs : [threadIDs];
+  const ids     = Array.isArray(threadIDs) ? threadIDs : [threadIDs];
   const results = [];
+  let sent = 0, failed = 0;
 
   for (const id of ids) {
-    try {
-      const res = await api.sendMessage(message, id);
-      const item = { threadID: id, ok: true, res };
-      results.push(item);
-      if (onResult) onResult(null, item);
-    } catch (e) {
-      const msg = e && e.error ? e.error : e && e.message ? e.message : String(e);
-      logger(`broadcast: failed for ${id}: ${msg}`, "warn");
-      const item = { threadID: id, ok: false, error: e };
-      results.push(item);
-      if (onResult) onResult(e, item);
+    let lastErr;
+    let ok = false;
 
-      if (
-        skipBlocked &&
-        /permission|blocked|not allowed|cannot send message|not authorized/i.test(msg)
-      ) {
-        // Skip only this target, continue with others
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const res = await api.sendMessage(message, id);
+        results.push({ threadID: id, ok: true, res });
+        if (onResult) onResult(null, { threadID: id, ok: true, res });
+        ok = true;
+        sent++;
+        break;
+      } catch (e) {
+        lastErr = e;
+        if (attempt < retries) await delay(1500);
       }
     }
-    if (delayMs > 0) {
-      await delay(delayMs);
+
+    if (!ok) {
+      const errMsg = lastErr?.error || lastErr?.message || String(lastErr);
+      logger(`[ KIRA ] broadcast فشل لـ ${id}: ${errMsg}`, "warn");
+      results.push({ threadID: id, ok: false, error: lastErr });
+      if (onResult) onResult(lastErr, { threadID: id, ok: false });
+      failed++;
     }
+
+    if (delayMs > 0) await delay(delayMs);
   }
 
+  logger(`[ KIRA ] broadcast انتهى: ${sent} نجح، ${failed} فشل`, "info");
   return results;
 }
 
 module.exports = broadcast;
-
