@@ -241,8 +241,18 @@ function onBot() {
                     try {
                         delete require.cache[require.resolve(filePath)];
                         const module = require(filePath);
-                        // ── GoatBot compatibility: حول onStart إلى run تلقائياً ──
-                        if (module.onStart && !module.run) module.run = module.onStart;
+                        // ── GoatBot compatibility ──
+                        if (module.onStart && !module.run) {
+                            module.run = function(args) {
+                                return module.onStart.call(module, args);
+                            };
+                        }
+                        // دعم onChat من GoatBot
+                        if (module.onChat && !module.handleEvent) {
+                            module.handleEvent = function(args) {
+                                return module.onChat.call(module, args);
+                            };
+                        }
                         if (!module.config || !module.run) throw new Error(global.getText('mirai', 'errorFormat') || 'missing config/run');
                         if (global.client.commands.has(module.config.name)) throw new Error(global.getText('mirai', 'nameExist') || 'Name Is Repeated');
 
