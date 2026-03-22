@@ -1,35 +1,40 @@
 // ============================================================
-//  AYMAN-FCA — Emit Auth
-//  مكتبة KIRA بوت | المطور: Ayman
-//  التطوير: تسجيل وقت الانتهاء + حفظ appstate قبل الإيقاف
+//  AYMAN-FCA v2.0 — Emit Auth (Session End Handler)
+//  © 2025 Ayman. All Rights Reserved.
+//
+//  يُشعر البوت بانتهاء الجلسة مع:
+//  • حفظ AppState قبل الإيقاف
+//  • تنظيف كامل للذاكرة
 // ============================================================
 "use strict";
+
+const fs   = require("fs");
+const path = require("path");
 
 module.exports = function createEmitAuth({ logger }) {
   return function emitAuth(ctx, api, globalCallback, reason, detail) {
 
-    // ✅ احفظ AppState قبل الإيقاف
+    // ✅ احفظ AppState قبل أي شيء
     try {
-      if (api && typeof api.getAppState === "function") {
-        const fs   = require("fs");
-        const path = require("path");
+      if (api?.getAppState) {
         const state = api.getAppState();
         if (state && state.length > 0) {
           const p   = path.join(process.cwd(), "appstate.json");
           const tmp = p + ".tmp";
           fs.writeFileSync(tmp, JSON.stringify(state, null, "\t"), "utf8");
           fs.renameSync(tmp, p);
-          logger("[ KIRA ] AppState محفوظ قبل الإيقاف ✅", "info");
+          logger("[ AYMAN ] AppState محفوظ قبل انتهاء الجلسة ✅", "info");
         }
       }
     } catch (_) {}
 
-    // ✅ تنظيف كل الـ timers
-    const clearSafe = (fn, ref) => { try { fn(ref); } catch (_) {} };
+    // ✅ إيقاف Session Keeper
+    try { if (ctx._sessionKeeper) ctx._sessionKeeper.stop(); } catch (_) {}
 
-    clearSafe(clearInterval, ctx._autoCycleTimer);  ctx._autoCycleTimer = null;
-    clearSafe(clearTimeout,  ctx._reconnectTimer);  ctx._reconnectTimer = null;
-    clearSafe(clearTimeout,  ctx._rTimeout);        ctx._rTimeout = null;
+    // ✅ تنظيف Timers
+    try { if (ctx._autoCycleTimer) { clearTimeout(ctx._autoCycleTimer);  ctx._autoCycleTimer = null; } } catch (_) {}
+    try { if (ctx._reconnectTimer) { clearTimeout(ctx._reconnectTimer);  ctx._reconnectTimer = null; } } catch (_) {}
+    try { if (ctx._rTimeout)       { clearTimeout(ctx._rTimeout);        ctx._rTimeout = null; }       } catch (_) {}
 
     try { ctx._ending = true; ctx._cycling = false; } catch (_) {}
 
@@ -46,17 +51,18 @@ module.exports = function createEmitAuth({ logger }) {
     // ✅ تنظيف الذاكرة
     try { if (ctx.tasks instanceof Map) ctx.tasks.clear(); } catch (_) {}
     try {
-      (ctx._autoSaveInterval || []).forEach(i => clearInterval(i));
+      (ctx._autoSaveInterval || []).forEach(i => { try { clearInterval(i); } catch (_) {} });
       ctx._autoSaveInterval = [];
     } catch (_) {}
     try {
       if (ctx._scheduler?.destroy) { ctx._scheduler.destroy(); ctx._scheduler = undefined; }
     } catch (_) {}
 
-    const msg = detail || reason;
-    logger(`[ KIRA ] auth → ${reason}: ${msg}`, "error");
+    delete process.env.AymanFcaOnline;
 
-    // ✅ أشعر البوت بالنوع والوقت
+    const msg = detail || reason;
+    logger(`[ AYMAN ] auth → ${reason}: ${msg}`, "error");
+
     if (typeof globalCallback === "function") {
       try {
         globalCallback({
@@ -66,7 +72,7 @@ module.exports = function createEmitAuth({ logger }) {
           timestamp: Date.now()
         }, null);
       } catch (e) {
-        logger(`[ KIRA ] emitAuth callback خطأ: ${e?.message || e}`, "error");
+        logger(`[ AYMAN ] emitAuth callback خطأ: ${e?.message || e}`, "error");
       }
     }
   };
