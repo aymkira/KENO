@@ -1,55 +1,31 @@
+// ============================================================
+//  AYMAN-FCA v2.0 — Change Archived Status
+//  © 2025 Ayman. All Rights Reserved.
+// ============================================================
 "use strict";
 
 const log = require("../../../func/logAdapter");
-const { formatID } = require("../../utils/format");
 const { parseAndCheckLogin } = require("../../utils/client");
+const { formatID } = require("../../utils/format");
+
 module.exports = function(defaultFuncs, api, ctx) {
   return function changeArchivedStatus(threadOrThreads, archive, callback) {
-    let resolveFunc = function() {};
-    let rejectFunc = function() {};
-    const returnPromise = new Promise(function(resolve, reject) {
-      resolveFunc = resolve;
-      rejectFunc = reject;
-    });
-
-    if (!callback) {
-      callback = function(err) {
-        if (err) {
-          return rejectFunc(err);
-        }
-        resolveFunc();
-      };
-    }
+    let resolve, reject;
+    const p = new Promise((res, rej) => { resolve = res; reject = rej; });
+    callback = callback || (err => err ? reject(err) : resolve());
 
     const form = {};
+    const threads = Array.isArray(threadOrThreads) ? threadOrThreads : [threadOrThreads];
+    threads.forEach(t => { form[`ids[${formatID(t)}]`] = archive; });
 
-    if (Array.isArray(threadOrThreads)) {
-      for (let i = 0; i < threadOrThreads.length; i++) {
-        form["ids[" + formatID(threadOrThreads[i]) + "]"] = archive;
-      }
-    } else {
-      form["ids[" + formatID(threadOrThreads) + "]"] = archive;
-    }
-
-    defaultFuncs
-      .post(
-        "https://www.facebook.com/ajax/mercury/change_archived_status.php",
-        ctx.jar,
-        form
-      )
+    defaultFuncs.post(
+      "https://www.facebook.com/ajax/mercury/change_archived_status.php",
+      ctx.jar, form
+    )
       .then(parseAndCheckLogin(ctx, defaultFuncs))
-      .then(function(resData) {
-        if (resData.error) {
-          throw resData;
-        }
+      .then(res => { if (res.error) throw res; callback(); })
+      .catch(err => { log.error("changeArchivedStatus", err); callback(err); });
 
-        return callback();
-      })
-      .catch(function(err) {
-        log.error("changeArchivedStatus", err);
-        return callback(err);
-      });
-
-    return returnPromise;
+    return p;
   };
 };
