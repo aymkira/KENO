@@ -1,49 +1,28 @@
+// ============================================================
+//  AYMAN-FCA v2.0 — Mark As Read All
+//  © 2025 Ayman. All Rights Reserved.
+// ============================================================
 "use strict";
 
 const log = require("../../../func/logAdapter");
 const { parseAndCheckLogin, saveCookies } = require("../../utils/client");
+
 module.exports = function(defaultFuncs, api, ctx) {
   return function markAsReadAll(callback) {
-    let resolveFunc = function() {};
-    let rejectFunc = function() {};
-    const returnPromise = new Promise(function(resolve, reject) {
-      resolveFunc = resolve;
-      rejectFunc = reject;
-    });
+    let resolve, reject;
+    const p = new Promise((res, rej) => { resolve = res; reject = rej; });
+    callback = callback || (err => err ? reject(err) : resolve());
 
-    if (!callback) {
-      callback = function(err, friendList) {
-        if (err) {
-          return rejectFunc(err);
-        }
-        resolveFunc(friendList);
-      };
-    }
-
-    const form = {
-      folder: "inbox"
-    };
-
-    defaultFuncs
-      .post(
-        "https://www.facebook.com/ajax/mercury/mark_folder_as_read.php",
-        ctx.jar,
-        form
-      )
+    defaultFuncs.post(
+      "https://www.facebook.com/ajax/mercury/mark_folder_as_read.php",
+      ctx.jar,
+      { folder: "inbox" }
+    )
       .then(saveCookies(ctx.jar))
       .then(parseAndCheckLogin(ctx, defaultFuncs))
-      .then(function(resData) {
-        if (resData.error) {
-          throw resData;
-        }
+      .then(res => { if (res.error) throw res; callback(); })
+      .catch(err => { log.error("markAsReadAll", err); callback(err); });
 
-        return callback();
-      })
-      .catch(function(err) {
-        log.error("markAsReadAll", err);
-        return callback(err);
-      });
-
-    return returnPromise;
+    return p;
   };
 };
