@@ -1,53 +1,32 @@
+// ============================================================
+//  AYMAN-FCA v2.0 — Search For Thread
+//  © 2025 Ayman. All Rights Reserved.
+// ============================================================
 "use strict";
 
 const { parseAndCheckLogin } = require("../../utils/client");
 const { formatThread } = require("../../utils/format");
+
 module.exports = function(defaultFuncs, api, ctx) {
   return function searchForThread(name, callback) {
-    let resolveFunc = function() {};
-    let rejectFunc = function() {};
-    const returnPromise = new Promise(function(resolve, reject) {
-      resolveFunc = resolve;
-      rejectFunc = reject;
-    });
+    let resolve, reject;
+    const p = new Promise((res, rej) => { resolve = res; reject = rej; });
+    callback = callback || ((err, data) => err ? reject(err) : resolve(data));
 
-    if (!callback) {
-      callback = function(err, friendList) {
-        if (err) {
-          return rejectFunc(err);
-        }
-        resolveFunc(friendList);
-      };
-    }
-
-    const tmpForm = {
-      client: "web_messenger",
-      query: name,
-      offset: 0,
-      limit: 21,
-      index: "fbid"
-    };
-
-    defaultFuncs
-      .post(
-        "https://www.facebook.com/ajax/mercury/search_threads.php",
-        ctx.jar,
-        tmpForm
-      )
+    defaultFuncs.post(
+      "https://www.facebook.com/ajax/mercury/search_threads.php",
+      ctx.jar,
+      { client: "web_messenger", query: name, offset: 0, limit: 21, index: "fbid" }
+    )
       .then(parseAndCheckLogin(ctx, defaultFuncs))
-      .then(function(resData) {
-        if (resData.error) {
-          throw resData;
-        }
-        if (!resData.payload.mercury_payload.threads) {
-          return callback({ error: "Could not find thread `" + name + "`." });
-        }
-        return callback(
-          null,
-          resData.payload.mercury_payload.threads.map(formatThread)
-        );
-      });
+      .then(res => {
+        if (res.error) throw res;
+        const threads = res.payload?.mercury_payload?.threads;
+        if (!threads) return callback({ error: `لم يُعثر على "${name}"` });
+        callback(null, threads.map(formatThread));
+      })
+      .catch(err => callback(err));
 
-    return returnPromise;
+    return p;
   };
 };
