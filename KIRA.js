@@ -1,68 +1,159 @@
-const chalk = require('chalk');
+"use strict";
+
+const chalk = require("chalk");
 var cron    = require("node-cron");
 const { exec } = require("child_process");
+const fs_native = require("fs");
 
-exec("rm -rf script/commands/data && mkdir -p script/commands/data && rm -rf script/commands/tad/*", (error) => {
-    if (error) { console.log(`error: ${error.message}`); return; }
-    console.log(chalk.bold.hex("#00FA9A")("[ AUTO CLEAR CACHE ] 🪽❯ ") + chalk.hex("#00FA9A")("Successfully delete cache"));
+exec("rm -rf script/commands/data && mkdir -p script/commands/data && rm -rf script/commands/tad/*", err => {
+    if (err) console.log(`cache clear error: ${err.message}`);
+    else console.log(chalk.bold.hex("#00FA9A")("[ AUTO CLEAR CACHE ] 🪽❯ ") + chalk.hex("#00FA9A")("Successfully delete cache"));
 });
 
-const DateAndTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Baghdad' });
+const DateAndTime = new Date().toLocaleString("en-US", { timeZone: "Asia/Baghdad" });
 console.log(chalk.bold.hex("#059242").bold(DateAndTime));
 
 const { readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } = require("fs-extra");
 const { join, resolve } = require("path");
-const { execSync } = require('child_process');
+const { execSync } = require("child_process");
 const logger = require("./utils/log.js");
 const login  = require("./includes/dongdev-FCA");
 const https  = require("https");
 
-// ✅ Session Keeper + Ultra Engine
 const { createSessionKeeper } = require("./includes/dongdev-FCA/src/utils/sessionKeeper");
-const AymanFCAEngine          = require("./includes/dongdev-FCA/ultra");
 
-const listPackage        = JSON.parse(readFileSync('./package.json')).dependencies;
+const listPackage        = JSON.parse(readFileSync("./package.json")).dependencies;
 const listbuiltinModules = require("module").builtinModules;
 
-const cacheDir = join(process.cwd(), 'script', 'commands', 'cache');
+const cacheDir = join(process.cwd(), "script", "commands", "cache");
 if (!existsSync(cacheDir)) mkdirSync(cacheDir, { recursive: true });
 
 console.log(chalk.bold.hex("#03f0fc").bold("[ KIRA ] » ") + chalk.bold.hex("#fcba03").bold("Initializing..."));
 
-global.client = new Object({
-    commands:        new Map(),
-    events:          new Map(),
-    cooldowns:       new Map(),
-    eventRegistered: new Array(),
-    handleSchedule:  new Array(),
-    handleReaction:  new Array(),
-    handleReply:     new Array(),
-    mainPath:        process.cwd(),
-    configPath:      new String(),
-    api:             null,
-    keeper:          null,
-    engine:          null,
-});
+// ════════════════════════════════════════════════════════════════
+//  ① CIRCUIT BREAKER
+// ════════════════════════════════════════════════════════════════
+const CircuitBreaker = {
+    failures: 0, open: false, openAt: 0,
+    THRESHOLD: 7, RESET_MS: 5 * 60 * 1000,
 
-global.data = new Object({
-    threadInfo:      new Map(),
-    threadData:      new Map(),
-    userName:        new Map(),
-    userBanned:      new Map(),
-    threadBanned:    new Map(),
-    commandBanned:   new Map(),
-    threadAllowNSFW: new Array(),
-    allUserID:       new Array(),
-    allCurrenciesID: new Array(),
-    allThreadID:     new Array(),
-});
+    record() {
+        this.failures++;
+        if (this.failures >= this.THRESHOLD && !this.open) {
+            this.open = true; this.openAt = Date.now();
+            logger(`⚡ Circuit OPEN — ${this.failures} فشل. توقف ${this.RESET_MS/60000} دقيقة`, "[ CIRCUIT ]");
+            setTimeout(() => { this.open = false; this.failures = 0; logger("⚡ Circuit CLOSED ✅", "[ CIRCUIT ]"); }, this.RESET_MS);
+        }
+    },
+    reset() { this.failures = 0; this.open = false; },
+    isOpen() {
+        if (!this.open) return false;
+        if (Date.now() - this.openAt >= this.RESET_MS) { this.reset(); return false; }
+        logger(`⚡ Circuit مفتوح — ${Math.round((this.RESET_MS-(Date.now()-this.openAt))/1000)}s متبقي`, "[ CIRCUIT ]");
+        return true;
+    }
+};
 
+// ════════════════════════════════════════════════════════════════
+//  ② GLOBAL RATE LIMITER
+// ════════════════════════════════════════════════════════════════
+const RateLimiter = {
+    _map: new Map(), _global: [],
+    PER_MAX: 20, GLB_MAX: 60, WIN: 60000,
+
+    canSend(threadID) {
+        const now = Date.now();
+        this._global = this._global.filter(t => now - t < this.WIN);
+        if (this._global.length >= this.GLB_MAX) {
+            logger(`🚫 Rate Limit عالمي (${this._global.length}/min)`, "[ RATE ]"); return false;
+        }
+        if (threadID) {
+            const key  = String(threadID);
+            const list = (this._map.get(key) || []).filter(t => now - t < this.WIN);
+            if (list.length >= this.PER_MAX) {
+                logger(`🚫 Rate Limit thread ${key} (${list.length}/min)`, "[ RATE ]"); return false;
+            }
+            list.push(now); this._map.set(key, list);
+        }
+        this._global.push(now); return true;
+    },
+
+    cleanup() {
+        const now = Date.now();
+        for (const [k, v] of this._map) {
+            const f = v.filter(t => now - t < this.WIN);
+            if (!f.length) this._map.delete(k); else this._map.set(k, f);
+        }
+    }
+};
+setInterval(() => RateLimiter.cleanup(), 5 * 60 * 1000);
+
+// ════════════════════════════════════════════════════════════════
+//  ③ MEMORY WATCHDOG
+// ════════════════════════════════════════════════════════════════
+const MemoryWatchdog = {
+    CRIT_MB: 480, WARN_MB: 380,
+    _history: [], _timer: null,
+
+    _usedMB()  { return Math.round(process.memoryUsage().heapUsed  / 1024 / 1024); },
+    _totalMB() { return Math.round(process.memoryUsage().heapTotal / 1024 / 1024); },
+
+    _cleanup() {
+        if (typeof global.gc === "function") { try { global.gc(); logger("🧹 GC ✅", "[ MEMORY ]"); } catch(_) {} }
+        try {
+            if (global.client?.cooldowns instanceof Map) {
+                const now = Date.now();
+                for (const [k, v] of global.client.cooldowns) if (now - v > 30000) global.client.cooldowns.delete(k);
+            }
+            if (Array.isArray(global.client?.handleReaction) && global.client.handleReaction.length > 200)
+                global.client.handleReaction = global.client.handleReaction.slice(-100);
+            if (Array.isArray(global.client?.handleReply) && global.client.handleReply.length > 200)
+                global.client.handleReply = global.client.handleReply.slice(-100);
+            if (global.data?.threadInfo instanceof Map && global.data.threadInfo.size > 500) global.data.threadInfo.clear();
+            if (global.data?.userName instanceof Map && global.data.userName.size > 1000) global.data.userName.clear();
+        } catch(_) {}
+        RateLimiter.cleanup();
+    },
+
+    start() {
+        if (this._timer) return;
+        this._timer = setInterval(() => {
+            const mb = this._usedMB(), total = this._totalMB(), pct = Math.round(mb/total*100);
+            this._history.push({ mb, ts: Date.now() });
+            if (this._history.length > 10) this._history.shift();
+            if (mb >= this.CRIT_MB) { logger(`🔴 RAM حرجة ${mb}MB/${total}MB (${pct}%) — تنظيف`, "[ MEMORY ]"); this._cleanup(); }
+            else if (mb >= this.WARN_MB) logger(`🟡 RAM مرتفعة ${mb}MB/${total}MB (${pct}%)`, "[ MEMORY ]");
+            else logger(`🟢 RAM سليمة ${mb}MB/${total}MB (${pct}%)`, "[ MEMORY ]");
+        }, 30 * 1000);
+        logger("🧠 MemoryWatchdog ✅", "[ MEMORY ]");
+    },
+    stop() { if (this._timer) { clearInterval(this._timer); this._timer = null; } }
+};
+
+// ════════════════════════════════════════════════════════════════
+//  ④ ERROR CLASSIFIERS
+// ════════════════════════════════════════════════════════════════
+function isNetworkErr(err) {
+    return /econnreset|etimedout|enotfound|eai_again|epipe|econnrefused|socket hang up|fetch failed/i.test(String(err?.message || err?.code || err || ""));
+}
+function isSessionErr(err) {
+    return /not logged in|invalid session|expired|checkpoint|account_inactive|blocked the login/i.test(String(err?.message || err?.error || err || ""));
+}
+function isMqttInitErr(err) {
+    return /mqtt.*not.*init|not.*connected|mqtt client is not/i.test(String(err?.message || err || ""));
+}
+
+// ════════════════════════════════════════════════════════════════
+//  GLOBALS
+// ════════════════════════════════════════════════════════════════
+global.client = { commands: new Map(), events: new Map(), cooldowns: new Map(), eventRegistered: [], handleSchedule: [], handleReaction: [], handleReply: [], mainPath: process.cwd(), configPath: "", api: null, keeper: null };
+global.data   = { threadInfo: new Map(), threadData: new Map(), userName: new Map(), userBanned: new Map(), threadBanned: new Map(), commandBanned: new Map(), threadAllowNSFW: [], allUserID: [], allCurrenciesID: [], allThreadID: [] };
 global.utils        = require("./utils/index.js");
-global.nodemodule   = new Object();
-global.config       = new Object();
-global.configModule = new Object();
-global.moduleData   = new Array();
-global.language     = new Object();
+global.nodemodule   = {};
+global.config       = {};
+global.configModule = {};
+global.moduleData   = [];
+global.language     = {};
 
 // ── config ────────────────────────────────────────────────────
 var configValue;
@@ -71,431 +162,336 @@ try {
     configValue = require(global.client.configPath);
     logger.loader("Found file config: config.json");
 } catch {
-    if (existsSync(global.client.configPath.replace(/\.json/g,"") + ".temp")) {
-        configValue = JSON.parse(readFileSync(global.client.configPath.replace(/\.json/g,"") + ".temp"));
+    if (existsSync(global.client.configPath.replace(/\.json/g, "") + ".temp")) {
+        configValue = JSON.parse(readFileSync(global.client.configPath.replace(/\.json/g, "") + ".temp"));
         logger.loader("Found: config.json.temp");
     } else return logger.loader("config.json not found!", "error");
 }
-
-try {
-    for (const key in configValue) global.config[key] = configValue[key];
-    logger.loader("Config Loaded!");
-} catch { return logger.loader("Can't load file config!", "error"); }
-
-writeFileSync(global.client.configPath + ".temp", JSON.stringify(global.config, null, 4), 'utf8');
+try { for (const k in configValue) global.config[k] = configValue[k]; logger.loader("Config Loaded!"); }
+catch { return logger.loader("Can't load file config!", "error"); }
+writeFileSync(global.client.configPath + ".temp", JSON.stringify(global.config, null, 4), "utf8");
 
 // ── language ──────────────────────────────────────────────────
-const langFile = (readFileSync(`${__dirname}/languages/${global.config.language || "ar"}.lang`, { encoding: 'utf-8' })).split(/\r?\n|\r/);
-const langData  = langFile.filter(item => item.indexOf('#') != 0 && item != '');
-for (const item of langData) {
-    const getSeparator = item.indexOf('=');
-    const itemKey   = item.slice(0, getSeparator);
-    const itemValue = item.slice(getSeparator + 1, item.length);
-    const head  = itemKey.slice(0, itemKey.indexOf('.'));
-    const key   = itemKey.replace(head + '.', '');
-    const value = itemValue.replace(/\\n/gi, '\n');
-    if (typeof global.language[head] == "undefined") global.language[head] = new Object();
-    global.language[head][key] = value;
+const langFile = readFileSync(`${__dirname}/languages/${global.config.language || "ar"}.lang`, { encoding: "utf-8" }).split(/\r?\n|\r/);
+for (const item of langFile.filter(i => !i.startsWith("#") && i !== "")) {
+    const sep = item.indexOf("=");
+    const iKey = item.slice(0, sep), head = iKey.slice(0, iKey.indexOf(".")), key = iKey.replace(head + ".", "");
+    if (!global.language[head]) global.language[head] = {};
+    global.language[head][key] = item.slice(sep + 1).replace(/\\n/gi, "\n");
 }
-
-global.getText = function (...args) {
-    const langText = global.language;
-    if (!langText.hasOwnProperty(args[0])) return args[args.length - 1] || '';
-    var text = langText[args[0]][args[1]] || '';
-    for (var i = args.length - 1; i > 0; i--) {
-        text = text.replace(RegExp(`%${i}`, 'g'), args[i + 1]);
-    }
-    return text;
+global.getText = function(...a) {
+    if (!global.language[a[0]]) return a[a.length-1] || "";
+    let t = global.language[a[0]][a[1]] || "";
+    for (let i = a.length-1; i > 0; i--) t = t.replace(RegExp(`%${i}`,"g"), a[i+1]);
+    return t;
 };
 
 // ── appState ──────────────────────────────────────────────────
 var appStateFile = resolve(join(global.client.mainPath, global.config.APPSTATEPATH || "appstate.json"));
-var appState = [];
+var appState     = [];
 
-// ✅ اقرأ دائماً من الملف — لا من الذاكرة
 function loadAppStateFromDisk() {
-    try {
-        const raw = JSON.parse(readFileSync(appStateFile, 'utf8'));
-        return Array.isArray(raw) && raw.length > 0 ? raw : [];
-    } catch { return []; }
+    try { const r = JSON.parse(readFileSync(appStateFile, "utf8")); return Array.isArray(r) && r.length ? r : []; } catch { return []; }
 }
-
+function saveAppStateAtomic(state) {
+    try {
+        if (!Array.isArray(state) || !state.length) return false;
+        const tmp = appStateFile + ".tmp";
+        writeFileSync(tmp, JSON.stringify(state, null, "\t"), "utf8");
+        fs_native.renameSync(tmp, appStateFile);
+        return true;
+    } catch(e) { logger(`⚠️ حفظ appState: ${e.message}`, "[ SESSION ]"); return false; }
+}
 appState = loadAppStateFromDisk();
-if (appState.length > 0) logger.loader("✅ appstate موجود وصالح");
+if (appState.length) logger.loader("✅ appstate موجود وصالح");
 else logger.loader("⚠️ appstate غير موجود");
 
 // ── GitHub backup ─────────────────────────────────────────────
 function pushAppStateToGitHub(state) {
-    const cfg = global.config;
-    if (!cfg.GITHUB_TOKEN || !cfg.GITHUB_REPO) return;
-    const content = Buffer.from(JSON.stringify(state)).toString('base64');
-    const url     = `/repos/${cfg.GITHUB_REPO}/contents/appstate.json`;
-    const headers = { 'Authorization':`token ${cfg.GITHUB_TOKEN}`, 'User-Agent':'KIRA-Bot', 'Content-Type':'application/json' };
-    const getReq  = https.request({ hostname:'api.github.com', path:url, method:'GET', headers }, res => {
-        let raw = '';
-        res.on('data', d => raw += d);
-        res.on('end', () => {
-            try {
-                const sha  = JSON.parse(raw).sha;
-                const body = JSON.stringify({ message:'🔄 appState auto-save', content, sha });
-                const putReq = https.request({
-                    hostname:'api.github.com', path:url, method:'PUT',
-                    headers:{ ...headers, 'Content-Length':Buffer.byteLength(body) }
-                }, r => {
-                    if (r.statusCode===200||r.statusCode===201)
-                        logger('☁️ appState → GitHub ✅','[ SESSION ]');
-                });
-                putReq.on('error', ()=>{});
-                putReq.write(body); putReq.end();
-            } catch(_) {}
+    try {
+        const cfg = global.config;
+        if (!cfg.GITHUB_TOKEN || !cfg.GITHUB_REPO) return;
+        const content = Buffer.from(JSON.stringify(state)).toString("base64");
+        const url = `/repos/${cfg.GITHUB_REPO}/contents/appstate.json`;
+        const headers = { "Authorization":`token ${cfg.GITHUB_TOKEN}`, "User-Agent":"KIRA-Bot", "Content-Type":"application/json" };
+        const g = https.request({ hostname:"api.github.com", path:url, method:"GET", headers }, res => {
+            let raw = "";
+            res.on("data", d => raw += d);
+            res.on("end", () => {
+                try {
+                    const body = JSON.stringify({ message:"🔄 appState", content, sha: JSON.parse(raw).sha });
+                    const p = https.request({ hostname:"api.github.com", path:url, method:"PUT", headers:{ ...headers,"Content-Length":Buffer.byteLength(body) } }, r => {
+                        logger(r.statusCode === 200 || r.statusCode === 201 ? "☁️ GitHub ✅" : `☁️ GitHub ${r.statusCode}`, "[ SESSION ]");
+                    });
+                    p.on("error",()=>{}); p.write(body); p.end();
+                } catch(_) {}
+            });
         });
-    });
-    getReq.on('error', ()=>{}); getReq.end();
+        g.on("error",()=>{}); g.end();
+    } catch(_) {}
 }
 
 // ════════════════════════════════════════════════════════════════
+//  MAIN
+// ════════════════════════════════════════════════════════════════
 function onBot() {
-
     var _saveInterval, _keepAlive;
 
     function clearIntervals() {
-        if (global.client.keeper) { try { global.client.keeper.stop(); } catch(_) {} global.client.keeper = null; }
-        if (global.client.engine) { try { global.client.engine.stop(); } catch(_) {} global.client.engine = null; }
-        [_saveInterval, _keepAlive].forEach(i => { if (i) clearInterval(i); });
+        try { if (global.client.keeper) { global.client.keeper.stop(); global.client.keeper = null; } } catch(_) {}
+        [_saveInterval, _keepAlive].forEach(t => { try { if (t) clearInterval(t); } catch(_) {} });
         _saveInterval = null; _keepAlive = null;
+        MemoryWatchdog.stop();
     }
 
-    var loginData  = {};
-    var retryCount = 0;
+    var loginData = {}, retryCount = 0;
     const MAX_RETRIES = 20;
+    var _reconnectDelay = 5000;
 
     function reconnect(reason) {
+        if (CircuitBreaker.isOpen()) {
+            logger("⚡ Circuit مفتوح — تأجيل", "[ RECONNECT ]");
+            setTimeout(() => reconnect(reason), CircuitBreaker.RESET_MS);
+            return;
+        }
         clearIntervals();
         retryCount++;
-        if (retryCount > MAX_RETRIES) {
-            logger(`💀 تجاوز الحد الأقصى (${MAX_RETRIES}). إيقاف.`, '[ LOGIN ]');
-            process.exit(1);
-        }
-        // ✅ Exponential backoff
-        const delay = Math.min(10000 * Math.pow(1.5, retryCount - 1), 5 * 60 * 1000);
-        logger(`🔄 إعادة تشغيل (${retryCount}/${MAX_RETRIES}) بعد ${Math.round(delay/1000)}s — ${reason}`, '[ LOGIN ]');
-        setTimeout(() => {
-            // ✅ اقرأ appState الأحدث من الملف
-            const fresh = loadAppStateFromDisk();
-            if (fresh.length > 0) { appState = fresh; logger('📂 appState محدَّث ✅','[ SESSION ]'); }
-            tryLogin();
-        }, delay);
+        CircuitBreaker.record();
+        if (retryCount > MAX_RETRIES) { logger(`💀 تجاوز الحد (${MAX_RETRIES})`, "[ LOGIN ]"); process.exit(1); }
+        const delay = Math.min(_reconnectDelay, 300000);
+        _reconnectDelay = Math.min(_reconnectDelay * 2, 300000);
+        logger(`🔄 Reconnect (${retryCount}/${MAX_RETRIES}) بعد ${Math.round(delay/1000)}s — ${reason}`, "[ RECONNECT ]");
+        setTimeout(() => { const f = loadAppStateFromDisk(); if (f.length) appState = f; tryLogin(); }, delay);
     }
 
     function tryLogin() {
-        logger(`🔑 محاولة login #${retryCount + 1}`, '[ LOGIN ]');
-
-        if (appState.length > 0) {
-            loginData = { appState };
-        } else {
-            // ✅ لا تسجّل دخول بإيميل — أوقف مباشرة
-            logger('❌ appstate مفقود — أوقف التشغيل', '[ LOGIN ]');
-            process.exit(1);
-        }
+        logger(`🔑 محاولة login #${retryCount+1}`, "[ LOGIN ]");
+        if (!appState.length) { logger("❌ appstate مفقود", "[ LOGIN ]"); process.exit(1); }
+        loginData = { appState };
 
         login(loginData, {
-            listenEvents:     true,
-            logLevel:         "silent",
-            pauseLog:         true,
-            selfListen:       false,
-            autoMarkRead:     false,
-            autoMarkDelivery: false,
-            online:           true,
-            autoReconnect:    true,
-            userAgent:        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            listenEvents:true, logLevel:"silent", pauseLog:true, selfListen:false,
+            autoMarkRead:false, autoMarkDelivery:false, online:true, autoReconnect:true,
+            userAgent:"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }, async (err, api) => {
-            if (err) {
-                logger(`❌ فشل تسجيل الدخول: ${err?.message||err?.error||JSON.stringify(err)||"unknown"}`, '[ LOGIN ]');
-                return reconnect('login failed');
-            }
+            if (err) { logger(`❌ فشل: ${err?.message||err?.error||JSON.stringify(err)||"unknown"}`, "[ LOGIN ]"); return reconnect("login_failed"); }
 
-            retryCount = 0;
-            logger('✅ تم تسجيل الدخول!', '[ LOGIN ]');
+            retryCount = 0; _reconnectDelay = 5000; CircuitBreaker.reset();
+            logger("✅ تسجيل دخول ناجح!", "[ LOGIN ]");
             global.client.api = api;
             global.client.timeStart = Date.now();
 
-            // ── حفظ appState فوراً ──────────────────────────
+            // حفظ appState فوري
             try {
-                const newState = api.getAppState();
-                if (newState && newState.length > 0) {
-                    const tmp = appStateFile + ".tmp";
-                    writeFileSync(tmp, JSON.stringify(newState, null, '\t'));
-                    require('fs').renameSync(tmp, appStateFile);
-                    appState = newState;
-                    loginData['appState'] = newState;
-                    logger('💾 appstate محفوظ ✅','[ SESSION ]');
-                    pushAppStateToGitHub(newState);
-                }
-            } catch(e) { logger(`⚠️ فشل حفظ appState: ${e.message}`,'[ SESSION ]'); }
+                const ns = api.getAppState();
+                if (ns?.length) { saveAppStateAtomic(ns); appState = ns; loginData["appState"] = ns; logger("💾 appstate ✅","[ SESSION ]"); pushAppStateToGitHub(ns); }
+            } catch(e) { logger(`⚠️ ${e.message}`,"[ SESSION ]"); }
 
-            // ── ✅ استخراج ctx الحقيقي ──────────────────────
+            // استخراج ctx
             let realCtx = null;
             for (const key of Object.getOwnPropertyNames(api)) {
-                try {
-                    const v = api[key];
-                    if (v && typeof v==="object" && v.jar && v.userID && v.userID!=="0") {
-                        realCtx = v; break;
-                    }
-                } catch(_) {}
+                try { const v = api[key]; if (v && typeof v==="object" && v.jar && v.userID && v.userID!=="0") { realCtx = v; break; } } catch(_) {}
             }
-            if (realCtx) {
-                api.ctx = realCtx; api.ctxMain = realCtx;
-                logger(`🧠 ctx مُستخرج ✅ | UID:${realCtx.userID} | Region:${realCtx.region||"?"}`, '[ SESSION ]');
-            }
+            if (realCtx) { api.ctx = realCtx; api.ctxMain = realCtx; logger(`🧠 ctx ✅ | UID:${realCtx.userID} | Region:${realCtx.region||"?"}`, "[ SESSION ]"); }
+            else logger("⚠️ ctx لم يُعثر — بعض الأنظمة محدودة", "[ SESSION ]");
 
-            // ── ✅ Session Keeper ────────────────────────────
+            // Session Keeper
             try {
                 global.client.keeper = createSessionKeeper(api, realCtx||{}, {
                     appStatePath: appStateFile,
-                    onSave: (state) => {
-                        try { appState=state; loginData['appState']=state; pushAppStateToGitHub(state); } catch(_) {}
-                    }
+                    onSave: s => { try { saveAppStateAtomic(s); appState=s; loginData["appState"]=s; pushAppStateToGitHub(s); } catch(_) {} }
                 });
                 global.client.keeper.start();
-
-                // ربط watchdog reconnect
                 if (realCtx?._emitter) {
-                    realCtx._emitter.on("watchdog_reconnect", ({reason}) => {
-                        logger(`⚠️ Watchdog: ${reason}`, '[ SESSION ]');
-                        reconnect(reason);
-                    });
+                    realCtx._emitter.on("watchdog_reconnect", ({reason}) => { logger(`⚠️ Watchdog: ${reason}`,"[ SESSION ]"); reconnect(reason); });
                 }
-            } catch(e) { logger(`⚠️ Session Keeper خطأ: ${e.message}`, '[ SESSION ]'); }
+            } catch(e) { logger(`⚠️ Session Keeper: ${e.message}`,"[ SESSION ]"); }
 
-            // ── ✅ Ultra Engine (Watchdog + Health + Memory + Queue) ──
-            try {
-                const engine = new AymanFCAEngine({
-                    loginLib:    login,
-                    appStatePath: appStateFile,
-                    onSave: (state) => {
-                        try { appState=state; loginData['appState']=state; pushAppStateToGitHub(state); } catch(_) {}
-                    }
-                });
-                // ربط الأنظمة بالـ api الحالي بدون تسجيل دخول جديد
-                engine.session.attach(api);
-                engine.keepAlive.attach(api, realCtx||{});
-                engine.watchdog.attach(api, realCtx||{});
-                engine.memory.registerCleanup(()=>{
-                    if (realCtx?.tasks instanceof Map && realCtx.tasks.size>100) realCtx.tasks.clear();
-                });
-                engine.session.start();
-                engine.keepAlive.start();
-                engine.watchdog.start();
-                engine.memory.start();
-                engine.queue.start();
-                engine.health.start();
-
-                // ربط أحداث الـ engine
-                engine.watchdog.on("watchdog:restart", ({reasons}) => {
-                    logger(`⚠️ Ultra Watchdog: ${reasons}`, '[ ENGINE ]');
-                    reconnect("watchdog:" + reasons);
-                });
-                engine.health.on("health:critical", ({score}) => {
-                    logger(`⚠️ Ultra Health منخفض (${score})`, '[ ENGINE ]');
-                    reconnect("health_critical");
-                });
-
-                global.client.engine = engine;
-                logger(`🚀 Ultra Engine مفعّل ✅ | Health:${engine.health.score}/100`, '[ ENGINE ]');
-            } catch(e) {
-                logger(`⚠️ Ultra Engine خطأ: ${e.message}`, '[ ENGINE ]');
-            }
+            // Memory Watchdog
+            MemoryWatchdog.start();
 
             api.setOptions({ listenEvents:true, selfListen:false, autoMarkRead:false, autoMarkDelivery:false });
 
-            // ── تحميل الأوامر ────────────────────────────────
-            (function () {
+            // Rate Limit wrapper
+            const _origSend = api.sendMessage.bind(api);
+            api.sendMessage = function(msg, threadID, callback, messageID) {
+                if (!RateLimiter.canSend(threadID)) {
+                    const e = new Error(`Rate limit: thread ${threadID}`);
+                    if (typeof callback==="function") callback(e); return;
+                }
+                return _origSend(msg, threadID, callback, messageID);
+            };
+
+            // تحميل الأوامر
+            (function loadCommands() {
                 const cmdDirs = [];
                 function scanDir(dir) {
-                    for (const item of readdirSync(dir, { withFileTypes: true })) {
-                        const full = join(dir, item.name);
-                        if (item.isDirectory()) scanDir(full);
-                        else if (item.name.endsWith('.js') && !global.config.commandDisabled?.includes(item.name))
-                            cmdDirs.push(full);
-                    }
+                    try { for (const item of readdirSync(dir,{withFileTypes:true})) { const f=join(dir,item.name); if(item.isDirectory()) scanDir(f); else if(item.name.endsWith(".js")&&!global.config.commandDisabled?.includes(item.name)) cmdDirs.push(f); } } catch(_) {}
                 }
-                scanDir(join(global.client.mainPath, 'script', 'commands'));
+                scanDir(join(global.client.mainPath,"script","commands"));
 
                 for (const filePath of cmdDirs) {
                     try {
                         delete require.cache[require.resolve(filePath)];
-                        const module = require(filePath);
-                        if (!module.config || !module.run) throw new Error(global.getText('mirai','errorFormat')||'missing config/run');
-                        if (global.client.commands.has(module.config.name)) throw new Error(global.getText('mirai','nameExist')||'Name Is Repeated');
+                        const mod = require(filePath);
+                        if (!mod.config||!mod.run) throw new Error(global.getText("mirai","errorFormat")||"missing config/run");
+                        if (global.client.commands.has(mod.config.name)) throw new Error(global.getText("mirai","nameExist")||"Name Repeated");
 
-                        if (module.config.dependencies && typeof module.config.dependencies=='object') {
-                            for (const dep in module.config.dependencies) {
-                                const depPath = join(__dirname,'nodemodules','node_modules',dep);
+                        if (mod.config.dependencies && typeof mod.config.dependencies==="object") {
+                            for (const dep in mod.config.dependencies) {
+                                const dp = join(__dirname,"nodemodules","node_modules",dep);
                                 try {
-                                    if (!global.nodemodule.hasOwnProperty(dep)) {
-                                        if (listPackage.hasOwnProperty(dep)||listbuiltinModules.includes(dep))
-                                            global.nodemodule[dep]=require(dep);
-                                        else global.nodemodule[dep]=require(depPath);
-                                    }
+                                    if (!global.nodemodule[dep])
+                                        global.nodemodule[dep] = (listPackage[dep]||listbuiltinModules.includes(dep)) ? require(dep) : require(dp);
                                 } catch {
-                                    let check=false, isError;
-                                    execSync('npm --package-lock false --save install '+dep,{stdio:'inherit',env:process.env,shell:true,cwd:join(__dirname,'nodemodules')});
-                                    for (let i=1;i<=3;i++) {
-                                        try {
-                                            require.cache={};
-                                            if (listPackage.hasOwnProperty(dep)||listbuiltinModules.includes(dep))
-                                                global.nodemodule[dep]=require(dep);
-                                            else global.nodemodule[dep]=require(depPath);
-                                            check=true; break;
-                                        } catch(e){ isError=e; }
-                                        if (check||!isError) break;
-                                    }
-                                    if (!check||isError) throw `Can't install ${dep}`;
+                                    let ok=false;
+                                    execSync("npm --package-lock false --save install "+dep,{stdio:"inherit",env:process.env,shell:true,cwd:join(__dirname,"nodemodules")});
+                                    for (let i=0;i<3;i++) { try { global.nodemodule[dep]=(listPackage[dep]||listbuiltinModules.includes(dep))?require(dep):require(dp); ok=true; break; } catch(_){} }
+                                    if (!ok) throw new Error(`Can't install ${dep}`);
                                 }
                             }
                         }
 
-                        if (module.config.envConfig) {
-                            for (const env in module.config.envConfig) {
-                                if (typeof global.configModule[module.config.name]=='undefined') global.configModule[module.config.name]={};
-                                if (typeof global.config[module.config.name]=='undefined') global.config[module.config.name]={};
-                                if (typeof global.config[module.config.name][env]!=='undefined')
-                                    global.configModule[module.config.name][env]=global.config[module.config.name][env];
-                                else global.configModule[module.config.name][env]=module.config.envConfig[env]||'';
-                                if (typeof global.config[module.config.name][env]=='undefined')
-                                    global.config[module.config.name][env]=module.config.envConfig[env]||'';
+                        if (mod.config.envConfig) {
+                            for (const env in mod.config.envConfig) {
+                                if (!global.configModule[mod.config.name]) global.configModule[mod.config.name]={};
+                                if (!global.config[mod.config.name])       global.config[mod.config.name]={};
+                                global.configModule[mod.config.name][env] = global.config[mod.config.name][env]!==undefined ? global.config[mod.config.name][env] : mod.config.envConfig[env]??'';
+                                if (global.config[mod.config.name][env]===undefined) global.config[mod.config.name][env]=mod.config.envConfig[env]??'';
                             }
                         }
 
-                        if (module.onLoad) {
-                            try { module.onLoad({api}); }
-                            catch(e){ throw new Error(`onLoad error in ${module.config.name}: ${e.message}`); }
-                        }
-
-                        if (module.handleEvent) global.client.eventRegistered.push(module.config.name);
-                        global.client.commands.set(module.config.name, module);
-                        logger.loader(global.getText('mirai','successLoadModule',module.config.name)||`Loaded ${module.config.name}`);
+                        if (mod.onLoad) { try { mod.onLoad({api}); } catch(e) { throw new Error(`onLoad [${mod.config.name}]: ${e.message}`); } }
+                        if (mod.handleEvent) global.client.eventRegistered.push(mod.config.name);
+                        global.client.commands.set(mod.config.name, mod);
+                        logger.loader(global.getText("mirai","successLoadModule",mod.config.name)||`Loaded ${mod.config.name}`);
                     } catch(error) {
-                        logger.loader(`${global.getText('mirai','failLoadModule','',error.message||error)||`Can't load ${error.message||error}`}`,'error');
+                        logger.loader(global.getText("mirai","failLoadModule","",error.message||error)||`Can't load: ${error.message||error}`,"error");
                     }
                 }
             })();
 
-            // ── تحميل الأحداث ────────────────────────────────
-            (function () {
-                const evList = readdirSync(global.client.mainPath+'/script/events')
-                    .filter(f=>f.endsWith('.js')&&!global.config.eventDisabled?.includes(f));
-                for (const ev of evList) {
+            // تحميل الأحداث
+            (function loadEvents() {
+                let evFiles = [];
+                try { evFiles = readdirSync(join(global.client.mainPath,"script","events")).filter(f=>f.endsWith(".js")&&!global.config.eventDisabled?.includes(f)); } catch(_) {}
+
+                for (const ev of evFiles) {
                     try {
-                        var event = require(global.client.mainPath+'/script/events/'+ev);
-                        if (!event.config||!event.run) throw new Error(global.getText('mirai','errorFormat')||'missing config/run');
-                        if (global.client.events.has(event.config.name||'')) throw new Error(global.getText('mirai','nameExist')||'Name Is Repeated');
+                        const ep = join(global.client.mainPath,"script","events",ev);
+                        delete require.cache[require.resolve(ep)];
+                        const event = require(ep);
+                        if (!event.config||!event.run) throw new Error(global.getText("mirai","errorFormat")||"missing config/run");
+                        if (global.client.events.has(event.config.name||"")) throw new Error(global.getText("mirai","nameExist")||"Name Repeated");
+
                         if (event.config.envConfig) {
                             for (const env in event.config.envConfig) {
-                                if (typeof global.configModule[event.config.name]=='undefined') global.configModule[event.config.name]={};
-                                if (typeof global.config[event.config.name]=='undefined') global.config[event.config.name]={};
-                                if (typeof global.config[event.config.name][env]!=='undefined')
-                                    global.configModule[event.config.name][env]=global.config[event.config.name][env];
-                                else global.configModule[event.config.name][env]=event.config.envConfig[env]||'';
-                                if (typeof global.config[event.config.name][env]=='undefined')
-                                    global.config[event.config.name][env]=event.config.envConfig[env]||'';
+                                if (!global.configModule[event.config.name]) global.configModule[event.config.name]={};
+                                if (!global.config[event.config.name])       global.config[event.config.name]={};
+                                global.configModule[event.config.name][env] = global.config[event.config.name][env]!==undefined ? global.config[event.config.name][env] : event.config.envConfig[env]??'';
+                                if (global.config[event.config.name][env]===undefined) global.config[event.config.name][env]=event.config.envConfig[env]??'';
                             }
                         }
-                        if (event.onLoad) {
-                            try { event.onLoad({api}); }
-                            catch(e){ throw new Error(`onLoad error in ${event.config.name}: ${e.message}`); }
-                        }
+
+                        if (event.onLoad) { try { event.onLoad({api}); } catch(e) { throw new Error(`onLoad [${event.config.name}]: ${e.message}`); } }
                         global.client.events.set(event.config.name, event);
-                        logger.loader(global.getText('mirai','successLoadModule',event.config.name)||`Loaded ${event.config.name}`);
+                        logger.loader(global.getText("mirai","successLoadModule",event.config.name)||`Loaded ${event.config.name}`);
                     } catch(error) {
-                        logger.loader(`${global.getText('mirai','failLoadModule',event.config?.name,error)||`Can't load ${error.message||error}`}`,'error');
+                        logger.loader(global.getText("mirai","failLoadModule","",error.message||error)||`Can't load event: ${error.message||error}`,"error");
                     }
                 }
             })();
 
-            logger.loader(global.getText('mirai','finishLoadModule',global.client.commands.size,global.client.events.size)||`Installed ${global.client.commands.size} commands and ${global.client.events.size} events`);
-            logger.loader('=== '+(Date.now()-global.client.timeStart)+'ms ===');
-            writeFileSync(global.client.configPath, JSON.stringify(global.config,null,4),'utf8');
+            logger.loader(global.getText("mirai","finishLoadModule",global.client.commands.size,global.client.events.size)||`Installed ${global.client.commands.size} commands and ${global.client.events.size} events`);
+            logger.loader(`=== ${Date.now()-global.client.timeStart}ms ===`);
+            writeFileSync(global.client.configPath, JSON.stringify(global.config,null,4),"utf8");
             if (existsSync(global.client.configPath+".temp")) unlinkSync(global.client.configPath+".temp");
 
-            // ── listener ─────────────────────────────────────
-            const listener = require('./includes/listen.js')({api, models:null});
+            // listener
+            const listener = require("./includes/listen.js")({api, models:null});
 
             function listenerCallback(error, message) {
                 if (error) {
                     if (error?.type==="stop_listen") return;
-                    // ✅ account_inactive معالج صح
-                    if (error?.type==="account_inactive") {
-                        logger(`🔐 جلسة منتهية: ${error.reason||error.error}`,'[ SESSION ]');
-                        return reconnect('account_inactive');
-                    }
-                    logger(`⚠️ listenMqtt error: ${JSON.stringify(error)}`,'[ LISTEN ]');
-                    return reconnect('listen error');
+                    if (error?.type==="account_inactive"||isSessionErr(error)) { logger(`🔐 جلسة منتهية: ${error.reason||error.error||error.message}`,"[ SESSION ]"); return reconnect("account_inactive"); }
+                    if (isNetworkErr(error)) { logger(`🌐 خطأ شبكة: ${error.message||JSON.stringify(error)}`,"[ LISTEN ]"); return reconnect("network_error"); }
+                    logger(`⚠️ listenMqtt: ${JSON.stringify(error)}`,"[ LISTEN ]");
+                    return reconnect("listen_error");
                 }
-                if (['presence','typ','read_receipt'].includes(message?.type)) return;
-                // ✅ heartbeat للـ Watchdog
-                if (global.client.engine?.watchdog) global.client.engine.watchdog.heartbeat();
+                if (!message) return;
+                if (["presence","typ","read_receipt"].includes(message?.type)) return;
                 if (global.config.DeveloperMode==true) console.log(message);
                 return listener(message);
             }
 
             global.handleListen = api.listenMqtt(listenerCallback);
 
-            // ── حفظ دوري + keep-alive ────────────────────────
-            _saveInterval = setInterval(()=>{
+            // حفظ كل 10 دقائق
+            _saveInterval = setInterval(() => {
                 try {
-                    const newState = api.getAppState();
-                    if (!newState||newState.length===0) return;
-                    const tmp = appStateFile+".tmp";
-                    writeFileSync(tmp, JSON.stringify(newState,null,'\t'));
-                    require('fs').renameSync(tmp, appStateFile);
-                    appState=newState; loginData['appState']=newState;
-                    logger('💾 appState ✅','[ SESSION ]');
-                    pushAppStateToGitHub(newState);
-                } catch(e){ logger(`⚠️ ${e.message}`,'[ SESSION ]'); }
+                    const ns = api.getAppState();
+                    if (!ns?.length) return;
+                    if (saveAppStateAtomic(ns)) { appState=ns; loginData["appState"]=ns; logger("💾 appState ✅","[ SESSION ]"); pushAppStateToGitHub(ns); }
+                } catch(e) { logger(`⚠️ ${e.message}`,"[ SESSION ]"); }
             }, 10*60*1000);
 
-            // ✅ keep-alive بدون reconnect عند الفشل
-            _keepAlive = setInterval(()=>{
-                try { api.markAsReadAll(()=>{}); } catch(_) {}
-            }, 5*60*1000);
+            // keep-alive
+            _keepAlive = setInterval(() => { try { api.markAsReadAll(()=>{}); } catch(_) {} }, 5*60*1000);
 
-            // ── إشعار التشغيل ─────────────────────────────────
+            // إشعار بعد 5 ثوانٍ (بعد MQTT)
             const momentt = require("moment-timezone").tz("Asia/Baghdad");
-            const time    = momentt.format("HH:mm:ss");
-            try { api.sendMessage(`✅ KIRA شغّال — ${time}`, global.config.ADMINBOT[0]); } catch(_) {}
+            setTimeout(() => {
+                try {
+                    api.sendMessage(
+                        `✅ KIRA Ultra شغّال — ${momentt.format("HH:mm:ss")}\n⚡ Circuit: ${CircuitBreaker.open?"مفتوح":"سليم"}\n🧠 RAM: ${MemoryWatchdog._usedMB()}MB`,
+                        global.config.ADMINBOT[0]
+                    );
+                } catch(_) {}
+            }, 5000);
 
-            cron.schedule('0 0 */1 * * *', ()=>{
-                const o = momentt.format("MM/DD/YYYY");
-                try { api.changeBio(`Prefix: ${global.config.PREFIX}\nBot: ${global.config.BOTNAME}\nDate: ${o}`); } catch(_) {}
+            cron.schedule("0 0 */1 * * *", () => {
+                try { api.changeBio(`Prefix: ${global.config.PREFIX}\nBot: ${global.config.BOTNAME}\nDate: ${momentt.format("MM/DD/YYYY")}`); } catch(_) {}
             }, { scheduled:true, timezone:"Asia/Baghdad" });
 
-        }); // end login
-    } // end tryLogin
+        });
+    }
 
     tryLogin();
-} // end onBot
+}
 
-// ── Start ─────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════
+//  START
+// ════════════════════════════════════════════════════════════════
 (async () => {
-    logger('🚀 بدء تشغيل KIRA Ultra', '[ START ]');
-    console.log(chalk.bold.hex("#eff1f0").bold("════════════════ KIRA ULTRA ONLINE ═══════════════"));
+    logger("🚀 KIRA Ultra Enterprise — بدء التشغيل", "[ START ]");
+    console.log(chalk.bold.hex("#eff1f0").bold("══════════ KIRA ULTRA ENTERPRISE ══════════"));
     onBot();
 })();
 
-// ── معالجة الأخطاء العالمية ──────────────────────────────────
-process.on('unhandledRejection', (err) => {
+// ════════════════════════════════════════════════════════════════
+//  GLOBAL ERROR HANDLERS
+// ════════════════════════════════════════════════════════════════
+process.on("unhandledRejection", err => {
     const msg = String(err?.message||err||"");
-    if (/ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|fetch failed|timeout/i.test(msg)) {
-        logger(`⚠️ شبكة (مُتجاهَل): ${msg}`,'[ ERROR ]'); return;
-    }
-    logger(`⚠️ unhandledRejection: ${msg}`,'[ ERROR ]');
+    if (isNetworkErr(err))  { logger(`🌐 شبكة (مُتجاهَل): ${msg}`,"[ ERROR ]"); return; }
+    if (isMqttInitErr(err)) { logger(`📡 MQTT init (مُتجاهَل): ${msg}`,"[ ERROR ]"); return; }
+    logger(`⚠️ unhandledRejection: ${msg}`,"[ ERROR ]");
 });
 
-process.on('uncaughtException', (err) => {
+process.on("uncaughtException", err => {
     const msg = String(err?.message||err||"");
-    if (/ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|fetch failed|timeout/i.test(msg)) {
-        logger(`⚠️ شبكة uncaught (مُتجاهَل): ${msg}`,'[ ERROR ]'); return;
-    }
-    logger(`💥 uncaughtException: ${msg}`,'[ ERROR ]');
+    if (isNetworkErr(err)) { logger(`🌐 شبكة uncaught (مُتجاهَل): ${msg}`,"[ ERROR ]"); return; }
+    logger(`💥 uncaughtException: ${msg}`,"[ ERROR ]");
+});
+
+process.on("SIGTERM", () => {
+    logger("🛑 SIGTERM — إغلاق آمن","[ SHUTDOWN ]");
+    try { if (global.client.api?.getAppState) { saveAppStateAtomic(global.client.api.getAppState()); logger("💾 AppState محفوظ ✅","[ SHUTDOWN ]"); } } catch(_) {}
+    process.exit(0);
+});
+
+process.on("SIGINT", () => {
+    logger("🛑 SIGINT — إغلاق آمن","[ SHUTDOWN ]");
+    try { if (global.client.api?.getAppState) saveAppStateAtomic(global.client.api.getAppState()); } catch(_) {}
+    process.exit(0);
 });
