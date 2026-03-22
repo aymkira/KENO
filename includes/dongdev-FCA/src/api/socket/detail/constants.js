@@ -1,8 +1,9 @@
+// ============================================================
+//  AYMAN-FCA v2.0 — MQTT Topics
+//  © 2025 Ayman. All Rights Reserved.
+// ============================================================
 "use strict";
-/**
- * MQTT topic list for Facebook Messenger real-time connection.
- * Subscriptions are created in connectMqtt on "connect".
- */
+
 module.exports = {
   topics: [
     "/ls_req",
