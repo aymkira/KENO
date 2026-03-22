@@ -1,57 +1,33 @@
+// ============================================================
+//  AYMAN-FCA v2.0 — Handle Friend Request
+//  © 2025 Ayman. All Rights Reserved.
+// ============================================================
 "use strict";
 
 const log = require("../../../func/logAdapter");
 const { parseAndCheckLogin } = require("../../utils/client");
-const { getType } = require("../../utils/format");
+
 module.exports = function(defaultFuncs, api, ctx) {
   return function handleFriendRequest(userID, accept, callback) {
-    if (getType(accept) !== "Boolean") {
-      throw {
-        error: "Please pass a boolean as a second argument."
-      };
-    }
+    if (typeof accept !== "boolean") throw { error: "accept يجب أن يكون boolean" };
 
-    let resolveFunc = function() {};
-    let rejectFunc = function() {};
-    const returnPromise = new Promise(function(resolve, reject) {
-      resolveFunc = resolve;
-      rejectFunc = reject;
-    });
-
-    if (!callback) {
-      callback = function(err, friendList) {
-        if (err) {
-          return rejectFunc(err);
-        }
-        resolveFunc(friendList);
-      };
-    }
+    let resolve, reject;
+    const p = new Promise((res, rej) => { resolve = res; reject = rej; });
+    callback = callback || (err => err ? reject(err) : resolve());
 
     const form = {
-      viewer_id: ctx.userID,
+      viewer_id:  ctx.userID,
       "frefs[0]": "jwl",
-      floc: "friend_center_requests",
-      ref: "/reqs.php",
-      action: accept ? "confirm" : "reject"
+      floc:       "friend_center_requests",
+      ref:        "/reqs.php",
+      action:     accept ? "confirm" : "reject"
     };
 
-    defaultFuncs
-      .post("https://www.facebook.com/requests/friends/ajax/", ctx.jar, form)
+    defaultFuncs.post("https://www.facebook.com/requests/friends/ajax/", ctx.jar, form)
       .then(parseAndCheckLogin(ctx, defaultFuncs))
-      .then(function(resData) {
-        if (resData.payload.err) {
-          throw {
-            err: resData.payload.err
-          };
-        }
+      .then(res => { if (res.payload?.err) throw { err: res.payload.err }; callback(); })
+      .catch(err => { log.error("handleFriendRequest", err); callback(err); });
 
-        return callback();
-      })
-      .catch(function(err) {
-        log.error("handleFriendRequest", err);
-        return callback(err);
-      });
-
-    return returnPromise;
+    return p;
   };
 };
