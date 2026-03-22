@@ -1,216 +1,80 @@
+// ============================================================
+//  AYMAN-FCA v2.0 — Middleware System
+//  © 2025 Ayman. All Rights Reserved.
+// ============================================================
 "use strict";
+
 const logger = require("../../../../func/logger");
 
-/**
- * Middleware system for filtering and processing events before they are emitted
- *
- * Middleware functions receive (event, next) where:
- * - event: The event object (can be modified)
- * - next: Function to call to continue to next middleware
- *   - next() - continue to next middleware
- *   - next(false) or next(null) - stop processing, don't emit event
- *   - next(error) - emit error instead
- */
 module.exports = function createMiddlewareSystem() {
-  const middlewareStack = [];
+  const stack = [];
 
-  /**
-   * Add middleware to the stack
-   * @param {Function|string} middleware - Middleware function or name for named middleware
-   * @param {Function} [fn] - Middleware function (if first param is name)
-   * @returns {Function} Unsubscribe function
-   */
   function use(middleware, fn) {
-    let middlewareFn, name;
-
+    let mFn, name;
     if (typeof middleware === "string" && typeof fn === "function") {
-      name = middleware;
-      middlewareFn = fn;
+      name = middleware; mFn = fn;
     } else if (typeof middleware === "function") {
-      middlewareFn = middleware;
-      name = `middleware_${middlewareStack.length}`;
-    } else {
-      throw new Error("Middleware must be a function or (name, function)");
-    }
+      mFn = middleware; name = `mw_${stack.length}`;
+    } else throw new Error("Middleware يجب أن يكون function أو (name, function)");
 
-    const wrapped = {
-      name,
-      fn: middlewareFn,
-      enabled: true
-    };
+    const wrapped = { name, fn: mFn, enabled: true };
+    stack.push(wrapped);
 
-    middlewareStack.push(wrapped);
-    logger(`Middleware "${name}" added`, "info");
-
-    // Return unsubscribe function
     return function remove() {
-      const index = middlewareStack.indexOf(wrapped);
-      if (index !== -1) {
-        middlewareStack.splice(index, 1);
-        logger(`Middleware "${name}" removed`, "info");
-      }
+      const i = stack.indexOf(wrapped);
+      if (i !== -1) stack.splice(i, 1);
     };
   }
 
-  /**
-   * Remove middleware by name or function
-   * @param {string|Function} identifier - Name or function to remove
-   * @returns {boolean} True if removed
-   */
-  function remove(identifier) {
-    if (typeof identifier === "string") {
-      const index = middlewareStack.findIndex(m => m.name === identifier);
-      if (index !== -1) {
-        const removed = middlewareStack.splice(index, 1)[0];
-        logger(`Middleware "${removed.name}" removed`, "info");
-        return true;
-      }
-      return false;
-    } else if (typeof identifier === "function") {
-      const index = middlewareStack.findIndex(m => m.fn === identifier);
-      if (index !== -1) {
-        const removed = middlewareStack.splice(index, 1)[0];
-        logger(`Middleware "${removed.name}" removed`, "info");
-        return true;
-      }
-      return false;
-    }
+  function remove(id) {
+    const i = typeof id === "string"
+      ? stack.findIndex(m => m.name === id)
+      : stack.findIndex(m => m.fn === id);
+    if (i !== -1) { stack.splice(i, 1); return true; }
     return false;
   }
 
-  /**
-   * Remove all middleware
-   */
-  function clear() {
-    const count = middlewareStack.length;
-    middlewareStack.length = 0;
-    logger(`All middleware cleared (${count} removed)`, "info");
-  }
+  function clear() { const n = stack.length; stack.length = 0; return n; }
+  function list()  { return stack.filter(m => m.enabled).map(m => m.name); }
 
-  /**
-   * Get list of middleware names
-   * @returns {string[]} Array of middleware names
-   */
-  function list() {
-    return middlewareStack.filter(m => m.enabled).map(m => m.name);
-  }
-
-  /**
-   * Enable/disable middleware by name
-   * @param {string} name - Middleware name
-   * @param {boolean} enabled - Enable or disable
-   * @returns {boolean} True if found and updated
-   */
   function setEnabled(name, enabled) {
-    const middleware = middlewareStack.find(m => m.name === name);
-    if (middleware) {
-      middleware.enabled = enabled;
-      logger(`Middleware "${name}" ${enabled ? "enabled" : "disabled"}`, "info");
-      return true;
-    }
+    const m = stack.find(m => m.name === name);
+    if (m) { m.enabled = enabled; return true; }
     return false;
   }
 
-  /**
-   * Process event through middleware stack
-   * @param {*} event - Event object
-   * @param {Function} finalCallback - Callback to call after all middleware
-   * @returns {Promise} Promise that resolves when processing is complete
-   */
-  function process(event, finalCallback) {
-    if (!middlewareStack.length) {
-      return finalCallback(null, event);
-    }
-
-    let index = 0;
-    const enabledMiddleware = middlewareStack.filter(m => m.enabled);
-
+  function process(event, finalCb) {
+    const enabled = stack.filter(m => m.enabled);
+    if (!enabled.length) return finalCb(null, event);
+    let idx = 0;
     function next(err) {
-      // Error occurred, stop processing
-      if (err && err !== false && err !== null) {
-        return finalCallback(err, null);
-      }
-
-      // Explicitly stopped (next(false) or next(null))
-      if (err === false || err === null) {
-        return finalCallback(null, null); // null event means don't emit
-      }
-
-      // No more middleware, call final callback
-      if (index >= enabledMiddleware.length) {
-        return finalCallback(null, event);
-      }
-
-      // Get next middleware
-      const middleware = enabledMiddleware[index++];
-
+      if (err === false || err === null) return finalCb(null, null);
+      if (err && err !== true)          return finalCb(err, null);
+      if (idx >= enabled.length)        return finalCb(null, event);
+      const mw = enabled[idx++];
       try {
-        // Call middleware with event and next
-        const result = middleware.fn(event, next);
-
-        // If middleware returns a promise, handle it
-        if (result && typeof result.then === "function") {
-          result
-            .then(() => next())
-            .catch(err => next(err));
-        } else if (result === false || result === null) {
-          // Middleware returned false/null, stop processing
-          finalCallback(null, null);
-        }
-        // If middleware called next() synchronously, it will continue
-      } catch (err) {
-        logger(`Middleware "${middleware.name}" error: ${err && err.message ? err.message : String(err)}`, "error");
-        next(err);
-      }
+        const r = mw.fn(event, next);
+        if (r && typeof r.then === "function") r.then(() => next()).catch(e => next(e));
+        else if (r === false || r === null) finalCb(null, null);
+      } catch (e) { next(e); }
     }
-
-    // Start processing
     next();
   }
 
-  /**
-   * Wrap a callback with middleware processing
-   * @param {Function} callback - Original callback (err, event)
-   * @returns {Function} Wrapped callback
-   */
-  function wrapCallback(callback) {
-    return function wrappedCallback(err, event) {
-      if (err) {
-        // Errors bypass middleware
-        return callback(err, null);
-      }
-
-      if (!event) {
-        return callback(null, null);
-      }
-
-      // Process event through middleware
-      process(event, (middlewareErr, processedEvent) => {
-        if (middlewareErr) {
-          return callback(middlewareErr, null);
-        }
-
-        // If processedEvent is null, middleware blocked the event
-        if (processedEvent === null) {
-          return; // Don't emit
-        }
-
-        // Emit processed event
-        callback(null, processedEvent);
+  function wrapCallback(cb) {
+    return function(err, event) {
+      if (err)    return cb(err, null);
+      if (!event) return cb(null, null);
+      process(event, (mErr, processed) => {
+        if (mErr)          return cb(mErr, null);
+        if (processed === null) return;
+        cb(null, processed);
       });
     };
   }
 
   return {
-    use,
-    remove,
-    clear,
-    list,
-    setEnabled,
-    process,
-    wrapCallback,
-    get count() {
-      return middlewareStack.filter(m => m.enabled).length;
-    }
+    use, remove, clear, list, setEnabled, process, wrapCallback,
+    get count() { return stack.filter(m => m.enabled).length; }
   };
 };
