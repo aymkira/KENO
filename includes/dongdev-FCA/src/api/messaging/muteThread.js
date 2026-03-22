@@ -1,50 +1,27 @@
+// ============================================================
+//  AYMAN-FCA v2.0 — Mute Thread
+//  © 2025 Ayman. All Rights Reserved.
+// ============================================================
 "use strict";
+
 const log = require("../../../func/logAdapter");
 const { parseAndCheckLogin, saveCookies } = require("../../utils/client");
+
 module.exports = function(defaultFuncs, api, ctx) {
-  // muteSecond: -1=permanent mute, 0=unmute, 60=one minute, 3600=one hour, etc.
   return function muteThread(threadID, muteSeconds, callback) {
-    let resolveFunc = function() {};
-    let rejectFunc = function() {};
-    const returnPromise = new Promise(function(resolve, reject) {
-      resolveFunc = resolve;
-      rejectFunc = reject;
-    });
+    let resolve, reject;
+    const p = new Promise((res, rej) => { resolve = res; reject = rej; });
+    callback = callback || (err => err ? reject(err) : resolve());
 
-    if (!callback) {
-      callback = function(err, friendList) {
-        if (err) {
-          return rejectFunc(err);
-        }
-        resolveFunc(friendList);
-      };
-    }
-
-    const form = {
-      thread_fbid: threadID,
+    defaultFuncs.post("https://www.facebook.com/ajax/mercury/change_mute_thread.php", ctx.jar, {
+      thread_fbid:   threadID,
       mute_settings: muteSeconds
-    };
-
-    defaultFuncs
-      .post(
-        "https://www.facebook.com/ajax/mercury/change_mute_thread.php",
-        ctx.jar,
-        form
-      )
+    })
       .then(saveCookies(ctx.jar))
       .then(parseAndCheckLogin(ctx, defaultFuncs))
-      .then(function(resData) {
-        if (resData.error) {
-          throw resData;
-        }
+      .then(res => { if (res.error) throw res; callback(); })
+      .catch(err => { log.error("muteThread", err); callback(err); });
 
-        return callback();
-      })
-      .catch(function(err) {
-        log.error("muteThread", err);
-        return callback(err);
-      });
-
-    return returnPromise;
+    return p;
   };
 };
