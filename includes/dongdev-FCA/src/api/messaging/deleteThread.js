@@ -1,56 +1,29 @@
+// ============================================================
+//  AYMAN-FCA v2.0 — Delete Thread
+//  © 2025 Ayman. All Rights Reserved.
+// ============================================================
 "use strict";
 
 const log = require("../../../func/logAdapter");
 const { parseAndCheckLogin } = require("../../utils/client");
 const { getType } = require("../../utils/format");
+
 module.exports = function(defaultFuncs, api, ctx) {
   return function deleteThread(threadOrThreads, callback) {
-    let resolveFunc = function() {};
-    let rejectFunc = function() {};
-    const returnPromise = new Promise(function(resolve, reject) {
-      resolveFunc = resolve;
-      rejectFunc = reject;
-    });
-    if (!callback) {
-      callback = function(err) {
-        if (err) {
-          return rejectFunc(err);
-        }
-        resolveFunc();
-      };
-    }
+    let resolve, reject;
+    const p = new Promise((res, rej) => { resolve = res; reject = rej; });
+    callback = callback || (err => err ? reject(err) : resolve());
 
-    const form = {
-      client: "mercury"
-    };
+    if (getType(threadOrThreads) !== "Array") threadOrThreads = [threadOrThreads];
 
-    if (getType(threadOrThreads) !== "Array") {
-      threadOrThreads = [threadOrThreads];
-    }
+    const form = { client: "mercury" };
+    threadOrThreads.forEach((id, i) => { form[`ids[${i}]`] = id; });
 
-    for (let i = 0; i < threadOrThreads.length; i++) {
-      form["ids[" + i + "]"] = threadOrThreads[i];
-    }
-
-    defaultFuncs
-      .post(
-        "https://www.facebook.com/ajax/mercury/delete_thread.php",
-        ctx.jar,
-        form
-      )
+    defaultFuncs.post("https://www.facebook.com/ajax/mercury/delete_thread.php", ctx.jar, form)
       .then(parseAndCheckLogin(ctx, defaultFuncs))
-      .then(function(resData) {
-        if (resData.error) {
-          throw resData;
-        }
+      .then(res => { if (res.error) throw res; callback(); })
+      .catch(err => { log.error("deleteThread", err); callback(err); });
 
-        return callback();
-      })
-      .catch(function(err) {
-        log.error("deleteThread", err);
-        return callback(err);
-      });
-
-    return returnPromise;
+    return p;
   };
 };
