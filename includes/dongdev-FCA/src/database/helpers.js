@@ -27,4 +27,10 @@ function normalizePayload(data, key = "data") {
   return Object.prototype.hasOwnProperty.call(data, key) ? data : { [key]: data };
 }
 
-module.exports = { DB_NOT_INIT, validateId, validateData, normalizeAttributes, normalizePayload };
+function wrapError(msg, err) {
+  const e = new Error(`${msg}: ${err?.message || String(err)}`);
+  e.original = err;
+  return e;
+}
+
+module.exports = { DB_NOT_INIT, validateId, validateData, normalizeAttributes, normalizePayload, wrapError };
