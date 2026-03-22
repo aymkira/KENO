@@ -1,43 +1,29 @@
+// ============================================================
+//  AYMAN-FCA v2.0 — Resolve Photo URL
+//  © 2025 Ayman. All Rights Reserved.
+// ============================================================
 "use strict";
+
 const log = require("../../../func/logAdapter");
 const { parseAndCheckLogin, saveCookies } = require("../../utils/client");
+
 module.exports = function(defaultFuncs, api, ctx) {
   return function resolvePhotoUrl(photoID, callback) {
-    let resolveFunc = function() {};
-    let rejectFunc = function() {};
-    const returnPromise = new Promise(function(resolve, reject) {
-      resolveFunc = resolve;
-      rejectFunc = reject;
-    });
+    let resolve, reject;
+    const p = new Promise((res, rej) => { resolve = res; reject = rej; });
+    callback = callback || ((err, data) => err ? reject(err) : resolve(data));
 
-    if (!callback) {
-      callback = function(err, friendList) {
-        if (err) {
-          return rejectFunc(err);
-        }
-        resolveFunc(friendList);
-      };
-    }
-
-    defaultFuncs
-      .get("https://www.facebook.com/mercury/attachments/photo", ctx.jar, {
-        photo_id: photoID
-      })
+    defaultFuncs.get(
+      "https://www.facebook.com/mercury/attachments/photo",
+      ctx.jar, { photo_id: photoID }
+    )
       .then(parseAndCheckLogin(ctx, defaultFuncs))
-      .then(resData => {
-        if (resData.error) {
-          throw resData;
-        }
-
-        const photoUrl = resData.jsmods.require[0][3][0];
-
-        return callback(null, photoUrl);
+      .then(res => {
+        if (res.error) throw res;
+        callback(null, res.jsmods?.require?.[0]?.[3]?.[0]);
       })
-      .catch(err => {
-        log.error("resolvePhotoUrl", err);
-        return callback(err);
-      });
+      .catch(err => { log.error("resolvePhotoUrl", err); callback(err); });
 
-    return returnPromise;
+    return p;
   };
 };
