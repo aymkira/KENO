@@ -1,8 +1,13 @@
+// ============================================================
+//  AYMAN-FCA v2.0 — Header Sanitizer
+//  © 2025 Ayman. All Rights Reserved.
+// ============================================================
 "use strict";
 
 function sanitizeHeaderValue(value) {
   if (value === null || value === undefined) return "";
   const str = String(value);
+  // ✅ إزالة كل الأحرف غير الصالحة في HTTP headers
   return str.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F\r\n]/g, "").trim();
 }
 
@@ -13,37 +18,24 @@ function sanitizeHeaderName(name) {
 
 function sanitizeHeaders(headers) {
   if (!headers || typeof headers !== "object") return {};
-  const sanitized = {};
+  const out = {};
   for (const [key, value] of Object.entries(headers)) {
-    const sanitizedKey = sanitizeHeaderName(key);
-    if (!sanitizedKey) continue;
+    const k = sanitizeHeaderName(key);
+    if (!k) continue;
+    if (Array.isArray(value) || (value !== null && typeof value === "object") || typeof value === "function") continue;
 
-    if (Array.isArray(value)) continue;
-    if (value !== null && typeof value === "object") continue;
-    if (typeof value === "function") continue;
-
+    // ✅ كشف القيم المسلسلة كـ array خطأً
     if (typeof value === "string") {
-      const trimmed = value.trim();
-      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-        try {
-          const parsed = JSON.parse(trimmed);
-          if (Array.isArray(parsed)) continue;
-        } catch {
-          // continue with normal sanitization
-        }
+      const t = value.trim();
+      if (t.startsWith("[") && t.endsWith("]")) {
+        try { if (Array.isArray(JSON.parse(t))) continue; } catch (_) {}
       }
     }
 
-    const sanitizedValue = sanitizeHeaderValue(value);
-    if (sanitizedValue !== "") {
-      sanitized[sanitizedKey] = sanitizedValue;
-    }
+    const v = sanitizeHeaderValue(value);
+    if (v !== "") out[k] = v;
   }
-  return sanitized;
+  return out;
 }
 
-module.exports = {
-  sanitizeHeaderValue,
-  sanitizeHeaderName,
-  sanitizeHeaders,
-};
+module.exports = { sanitizeHeaderValue, sanitizeHeaderName, sanitizeHeaders };
