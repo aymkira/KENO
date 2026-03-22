@@ -1,65 +1,31 @@
+// ============================================================
+//  AYMAN-FCA v2.0 — Handle Message Request
+//  © 2025 Ayman. All Rights Reserved.
+// ============================================================
 "use strict";
 
 const log = require("../../../func/logAdapter");
 const { parseAndCheckLogin } = require("../../utils/client");
 const { getType } = require("../../utils/format");
+
 module.exports = function(defaultFuncs, api, ctx) {
   return function handleMessageRequest(threadID, accept, callback) {
-    if (getType(accept) !== "Boolean") {
-      throw {
-        error: "Please pass a boolean as a second argument."
-      };
-    }
+    if (getType(accept) !== "Boolean") throw { error: "accept يجب أن يكون boolean" };
 
-    let resolveFunc = function() {};
-    let rejectFunc = function() {};
-    const returnPromise = new Promise(function(resolve, reject) {
-      resolveFunc = resolve;
-      rejectFunc = reject;
-    });
+    let resolve, reject;
+    const p = new Promise((res, rej) => { resolve = res; reject = rej; });
+    callback = callback || (err => err ? reject(err) : resolve());
 
-    if (!callback) {
-      callback = function(err, friendList) {
-        if (err) {
-          return rejectFunc(err);
-        }
-        resolveFunc(friendList);
-      };
-    }
+    if (getType(threadID) !== "Array") threadID = [threadID];
+    const box  = accept ? "inbox" : "other";
+    const form = { client: "mercury" };
+    threadID.forEach((id, i) => { form[`${box}[${i}]`] = id; });
 
-    const form = {
-      client: "mercury"
-    };
-
-    if (getType(threadID) !== "Array") {
-      threadID = [threadID];
-    }
-
-    const messageBox = accept ? "inbox" : "other";
-
-    for (let i = 0; i < threadID.length; i++) {
-      form[messageBox + "[" + i + "]"] = threadID[i];
-    }
-
-    defaultFuncs
-      .post(
-        "https://www.facebook.com/ajax/mercury/move_thread.php",
-        ctx.jar,
-        form
-      )
+    defaultFuncs.post("https://www.facebook.com/ajax/mercury/move_thread.php", ctx.jar, form)
       .then(parseAndCheckLogin(ctx, defaultFuncs))
-      .then(function(resData) {
-        if (resData.error) {
-          throw resData;
-        }
+      .then(res => { if (res.error) throw res; callback(); })
+      .catch(err => { log.error("handleMessageRequest", err); callback(err); });
 
-        return callback();
-      })
-      .catch(function(err) {
-        log.error("handleMessageRequest", err);
-        return callback(err);
-      });
-
-    return returnPromise;
+    return p;
   };
 };
