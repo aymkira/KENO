@@ -1,17 +1,15 @@
 // ============================================================
-//  AYMAN-FCA — Main Entry
-//  مكتبة KIRA بوت
-//  المطور: Ayman
-//  جميع الحقوق محفوظة © 2025 Ayman
+//  AYMAN-FCA v2.0
+//  Facebook Chat API for Node.js
+//  © 2025 Ayman. All Rights Reserved.
+//  جميع الحقوق محفوظة لأيمن
+//
+//  مكتبة مخصصة لبوت KIRA
+//  تدوم بـ AppState واحد شهراً أو أكثر
 // ============================================================
 
 const login = require("./module/login");
 
-// CommonJS default export
-module.exports = login;
-
-// دعم require({ login })
-module.exports.login = login;
-
-// دعم ESM interop
+module.exports         = login;
+module.exports.login   = login;
 module.exports.default = login;
