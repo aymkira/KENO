@@ -1,46 +1,28 @@
+// ============================================================
+//  AYMAN-FCA v2.0 — HTTP GET
+//  © 2025 Ayman. All Rights Reserved.
+// ============================================================
 "use strict";
 
 const { getType } = require("../../utils/format");
-const { get } = require("../../utils/request");
+const { get }     = require("../../utils/request");
 
-const httpGetFactory = function (defaultFuncs, api, ctx) {
+module.exports = function(defaultFuncs, api, ctx) {
   return function httpGet(url, form, callback, notAPI) {
-    let resolveFunc = () => { };
-    let rejectFunc = () => { };
+    let resolve, reject;
+    const p = new Promise((res, rej) => { resolve = res; reject = rej; });
 
-    const returnPromise = new Promise((resolve, reject) => {
-      resolveFunc = resolve;
-      rejectFunc = reject;
-    });
-
-    if (
-      !callback &&
-      (getType(form) === "Function" || getType(form) === "AsyncFunction")
-    ) {
-      callback = form;
-      form = {};
+    if (!callback && (getType(form) === "Function" || getType(form) === "AsyncFunction")) {
+      callback = form; form = {};
     }
-
-    form = form || {};
-
-    callback =
-      callback ||
-      function (err, data) {
-        if (err) return rejectFunc(err);
-        resolveFunc(data);
-      };
+    form     = form || {};
+    callback = callback || ((err, data) => err ? reject(err) : resolve(data));
 
     const executor = notAPI ? get : defaultFuncs.get;
-
     executor(url, ctx.jar, form)
-      .then((resData) => callback(null, resData.data))
-      .catch(function (err) {
-        console.error("httpGet", err);
-        return callback(err);
-      });
+      .then(res => callback(null, res?.data ?? res))
+      .catch(err => callback(err));
 
-    return returnPromise;
+    return p;
   };
 };
-
-module.exports = httpGetFactory;
