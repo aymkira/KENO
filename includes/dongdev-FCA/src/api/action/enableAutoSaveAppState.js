@@ -1,81 +1,72 @@
 // ============================================================
-//  AYMAN-FCA — Auto Save AppState
-//  مكتبة KIRA بوت | المطور: Ayman
-//  تحسين: حفظ عند الأخطاء + تحقق من صحة البيانات
+//  AYMAN-FCA v2.0 — Auto Save AppState
+//  © 2025 Ayman. All Rights Reserved.
+//
+//  حفظ ذكي: لا يحفظ إذا لم تتغير البيانات
+//  Atomic write: يحمي الملف من التلف
+//  يحفظ عند SIGINT/SIGTERM
 // ============================================================
 "use strict";
 
-const fs = require("fs");
+const fs   = require("fs");
 const path = require("path");
 const logger = require("../../../func/logger");
 
-module.exports = function (defaultFuncs, api, ctx) {
+module.exports = function(defaultFuncs, api, ctx) {
   return function enableAutoSaveAppState(options = {}) {
-    const filePath = options.filePath || path.join(process.cwd(), "appstate.json");
-    // ✅ الفترة الافتراضية 10 دقائق
-    const interval = options.interval || 10 * 60 * 1000;
-    const saveOnLogin = options.saveOnLogin !== false;
+    const filePath   = options.filePath || path.join(process.cwd(), "appstate.json");
+    const intervalMs = options.interval || 8 * 60 * 1000; // 8 دقائق
+    const saveOnLogin= options.saveOnLogin !== false;
 
-    let lastSavedHash = null;
+    let lastHash = null;
 
-    function hashState(data) {
-      // hash بسيط لتجنب الحفظ إذا لم تتغير البيانات
-      return JSON.stringify(data).length + "_" + (data.appState || []).length;
+    function hashState(state) {
+      return state.length + "_" + (state[0]?.value?.length || 0);
     }
 
-    function saveAppState(force = false) {
+    function saveState(force = false) {
       try {
-        const appState = api.getAppState();
-        if (!appState || !appState.appState || appState.appState.length === 0) {
-          logger("[ KIRA ] AppState فارغ — تم تخطي الحفظ", "warn");
-          return;
-        }
+        const state = api.getAppState();
+        if (!state || state.length === 0) { logger("[ AYMAN ] AppState فارغ — تخطي", "warn"); return; }
 
-        const currentHash = hashState(appState);
-        // ✅ لا تحفظ إذا لم تتغير البيانات (توفير I/O)
-        if (!force && currentHash === lastSavedHash) return;
+        const h = hashState(state);
+        if (!force && h === lastHash) return; // لا تغيير
+        lastHash = h;
 
-        const data = JSON.stringify(appState, null, 2);
-
-        // ✅ حفظ في ملف مؤقت أولاً ثم استبدال — يتجنب تلف الملف
-        const tmpPath = filePath + ".tmp";
-        fs.writeFileSync(tmpPath, data, "utf8");
-        fs.renameSync(tmpPath, filePath);
-
-        lastSavedHash = currentHash;
-        logger(`[ KIRA ] AppState محفوظ ✅ (${filePath})`, "info");
-      } catch (error) {
-        logger(`[ KIRA ] خطأ في حفظ AppState: ${error?.message || error}`, "error");
+        // Atomic write
+        const tmp = filePath + ".tmp";
+        fs.writeFileSync(tmp, JSON.stringify(state, null, "\t"), "utf8");
+        fs.renameSync(tmp, filePath);
+        logger(`[ AYMAN ] AppState محفوظ ✅ (${filePath})`, "info");
+      } catch (err) {
+        logger(`[ AYMAN ] خطأ حفظ AppState: ${err?.message || err}`, "error");
       }
     }
 
-    let immediateSaveTimer = null;
-    if (saveOnLogin) {
-      immediateSaveTimer = setTimeout(() => {
-        saveAppState(true);
-        immediateSaveTimer = null;
-      }, 2000);
-    }
+    // حفظ فوري عند اللوجين
+    let initTimer = null;
+    if (saveOnLogin) { initTimer = setTimeout(() => { saveState(true); initTimer = null; }, 2000); }
 
-    const intervalId = setInterval(() => saveAppState(), interval);
-    logger(`[ KIRA ] حفظ تلقائي للـ AppState مفعّل (كل ${Math.round(interval / 60000)} دقيقة)`, "info");
+    // حفظ دوري
+    const intervalId = setInterval(() => saveState(), intervalMs);
+    logger(`[ AYMAN ] حفظ تلقائي كل ${Math.round(intervalMs/60000)} دقيقة ✅`, "info");
 
     if (!ctx._autoSaveInterval) ctx._autoSaveInterval = [];
     ctx._autoSaveInterval.push(intervalId);
 
-    // ✅ احفظ عند الإيقاف
-    const exitHandler = () => saveAppState(true);
-    process.once("SIGINT", exitHandler);
+    // حفظ عند الإيقاف
+    const exitHandler = () => saveState(true);
+    process.once("SIGINT",  exitHandler);
     process.once("SIGTERM", exitHandler);
 
     return function disableAutoSaveAppState() {
-      if (immediateSaveTimer) { clearTimeout(immediateSaveTimer); immediateSaveTimer = null; }
+      if (initTimer) { clearTimeout(initTimer); initTimer = null; }
       clearInterval(intervalId);
-      process.removeListener("SIGINT", exitHandler);
+      process.removeListener("SIGINT",  exitHandler);
       process.removeListener("SIGTERM", exitHandler);
-      const index = ctx._autoSaveInterval?.indexOf(intervalId) ?? -1;
-      if (index !== -1) ctx._autoSaveInterval.splice(index, 1);
-      logger("[ KIRA ] تم إيقاف الحفظ التلقائي للـ AppState", "info");
+      const idx = ctx._autoSaveInterval?.indexOf(intervalId) ?? -1;
+      if (idx !== -1) ctx._autoSaveInterval.splice(idx, 1);
+      logger("[ AYMAN ] تم إيقاف الحفظ التلقائي", "info");
     };
   };
 };
