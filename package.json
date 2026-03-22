@@ -4,7 +4,7 @@
   "description": "KIRA Bot Messenger",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node --max-old-space-size=768 --expose-gc index.js",
     "login": "node login"
   },
   "engines": {
