@@ -139,6 +139,111 @@ function getHeaders(url, options, ctx, customHeader) {
 
 module.exports = { getHeaders };
 
+
+  return str;
+}
+
+// Sanitize header name to ensure it's valid
+function sanitizeHeaderName(name) {
+  if (!name || typeof name !== "string") return "";
+  // Remove invalid characters for HTTP header names
+  return name.replace(/[^\x21-\x7E]/g, "").trim();
+}
+
+function getHeaders(url, options, ctx, customHeader) {
+  // ── استخدم stealth engine لو موجود ────────────────────
+  try {
+    const stealth = require("../../func/stealth");
+    if (ctx) {
+      const stealthHeaders = stealth.buildApiHeaders(url, ctx);
+      // دمج مع customHeader
+      if (customHeader && typeof customHeader === "object") {
+        for (const [key, value] of Object.entries(customHeader)) {
+          if (value && typeof value !== "object" && typeof value !== "function") {
+            stealthHeaders[sanitizeHeaderName(key)] = sanitizeHeaderValue(String(value));
+          }
+        }
+      }
+      return stealthHeaders;
+    }
+  } catch (_) {}
+
+  const u = new URL(url);
+  const ua = options?.userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+  const referer = options?.referer || "https://www.facebook.com/";
+  const origin = referer.replace(/\/+$/, "");
+  const contentType = options?.contentType || "application/x-www-form-urlencoded";
+  const acceptLang = options?.acceptLanguage || "ar,en-US;q=0.9,en;q=0.8";
+  const headers = {
+    Host: sanitizeHeaderValue(u.host),
+    Origin: sanitizeHeaderValue(origin),
+    Referer: sanitizeHeaderValue(referer),
+    "User-Agent": sanitizeHeaderValue(ua),
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.8,*/*;q=0.7",
+    "Accept-Language": sanitizeHeaderValue(acceptLang),
+    "Accept-Encoding": "gzip, deflate, br",
+    "Content-Type": sanitizeHeaderValue(contentType),
+    Connection: "keep-alive",
+    DNT: "1",
+    "Upgrade-Insecure-Requests": "1",
+    "sec-ch-ua": "\"Chromium\";v=\"139\", \"Not;A=Brand\";v=\"24\", \"Google Chrome\";v=\"139\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\"",
+    "sec-ch-ua-arch": "\"x86\"",
+    "sec-ch-ua-bitness": "\"64\"",
+    "sec-ch-ua-full-version-list": "\"Chromium\";v=\"139.0.0.0\", \"Not;A=Brand\";v=\"24.0.0.0\", \"Google Chrome\";v=\"139.0.0.0\"",
+    "sec-ch-ua-platform-version": "\"15.0.0\"",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Dest": "empty",
+    "X-Requested-With": "XMLHttpRequest",
+    Pragma: "no-cache",
+    "Cache-Control": "no-cache"
+  };
+  if (ctx?.region) {
+    const regionValue = sanitizeHeaderValue(ctx.region);
+    if (regionValue) headers["X-MSGR-Region"] = regionValue;
+  }
+  if (customHeader && typeof customHeader === "object") {
+    // Filter customHeader to only include valid HTTP header values (strings, numbers, booleans)
+    // Exclude functions, objects, arrays, and other non-serializable values
+    for (const [key, value] of Object.entries(customHeader)) {
+      // Skip null, undefined, functions, objects, and arrays
+      if (value === null || value === undefined || typeof value === "function") {
+        continue;
+      }
+      if (typeof value === "object") {
+        // Arrays are objects in JavaScript, so check for arrays explicitly
+        if (Array.isArray(value)) {
+          continue;
+        }
+        // Skip plain objects (but allow null which is already handled above)
+        continue;
+      }
+      // Only allow strings, numbers, and booleans - convert to string and sanitize
+      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+        const sanitizedKey = sanitizeHeaderName(key);
+        const sanitizedValue = sanitizeHeaderValue(value);
+        if (sanitizedKey && sanitizedValue !== "") {
+          headers[sanitizedKey] = sanitizedValue;
+        }
+      }
+    }
+  }
+  // Final pass: sanitize all header values to ensure no invalid characters
+  const sanitizedHeaders = {};
+  for (const [key, value] of Object.entries(headers)) {
+    const sanitizedKey = sanitizeHeaderName(key);
+    const sanitizedValue = sanitizeHeaderValue(value);
+    if (sanitizedKey && sanitizedValue !== "") {
+      sanitizedHeaders[sanitizedKey] = sanitizedValue;
+    }
+  }
+  return sanitizedHeaders;
+}
+
+module.exports = { getHeaders };
+
   return {
     userAgent,
     secChUa,
