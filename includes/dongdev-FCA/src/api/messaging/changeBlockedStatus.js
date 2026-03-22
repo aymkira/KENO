@@ -1,48 +1,27 @@
+// ============================================================
+//  AYMAN-FCA v2.0 — Change Blocked Status
+//  © 2025 Ayman. All Rights Reserved.
+// ============================================================
 "use strict";
 
 const log = require("../../../func/logAdapter");
 const { parseAndCheckLogin, saveCookies } = require("../../utils/client");
+
 module.exports = function(defaultFuncs, api, ctx) {
   return function changeBlockedStatus(userID, block, callback) {
-    let resolveFunc = function() {};
-    let rejectFunc = function() {};
-    const returnPromise = new Promise(function(resolve, reject) {
-      resolveFunc = resolve;
-      rejectFunc = reject;
-    });
+    let resolve, reject;
+    const p = new Promise((res, rej) => { resolve = res; reject = rej; });
+    callback = callback || (err => err ? reject(err) : resolve());
 
-    if (!callback) {
-      callback = function(err) {
-        if (err) {
-          return rejectFunc(err);
-        }
-        resolveFunc();
-      };
-    }
-
-    defaultFuncs
-      .post(
-        `https://www.facebook.com/messaging/${
-          block ? "" : "un"
-        }block_messages/`,
-        ctx.jar,
-        {
-          fbid: userID
-        }
-      )
+    defaultFuncs.post(
+      `https://www.facebook.com/messaging/${block ? "" : "un"}block_messages/`,
+      ctx.jar, { fbid: userID }
+    )
       .then(saveCookies(ctx.jar))
       .then(parseAndCheckLogin(ctx, defaultFuncs))
-      .then(function(resData) {
-        if (resData.error) {
-          throw resData;
-        }
+      .then(res => { if (res.error) throw res; callback(); })
+      .catch(err => { log.error("changeBlockedStatus", err); callback(err); });
 
-        return callback();
-      })
-      .catch(function(err) {
-        log.error("changeBlockedStatus", err);
-        return callback(err);
-      });
-    return returnPromise;
+    return p;
   };
 };
