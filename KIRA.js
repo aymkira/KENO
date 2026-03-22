@@ -17,6 +17,10 @@ const logger    = require("./utils/log.js");
 const login     = require("./includes/dongdev-FCA");
 const axios     = require("axios");
 const https     = require("https");
+
+// ── Session Keeper ───────────────────────────────────────────────
+const { createSessionKeeper } = require("./includes/dongdev-FCA/src/utils/sessionKeeper");
+
 const listPackage        = JSON.parse(readFileSync('./package.json')).dependencies;
 const listbuiltinModules = require("module").builtinModules;
 
@@ -37,6 +41,7 @@ global.client = new Object({
     mainPath:        process.cwd(),
     configPath:      new String(),
     api:             null,
+    keeper:          null,
 });
 
 global.data = new Object({
@@ -77,7 +82,6 @@ try {
     logger.loader("Config Loaded!");
 } catch { return logger.loader("Can't load file config!", "error"); }
 
-// ── تحقق من GITHUB_TOKEN ────────────────────────────────────────
 if (!global.config.GITHUB_TOKEN) {
     logger.loader("⚠️ GITHUB_TOKEN مو موجود في config.json — data.js لن يعمل!", "error");
 }
@@ -163,6 +167,11 @@ function onBot() {
     var _saveInterval, _keepAlive, _cookieRefresh, _healthCheck;
 
     function clearIntervals() {
+        // ── أوقف Session Keeper عند إعادة الاتصال ──────────────
+        if (global.client.keeper) {
+            try { global.client.keeper.stop(); } catch(_) {}
+            global.client.keeper = null;
+        }
         [_saveInterval, _keepAlive, _cookieRefresh, _healthCheck].forEach(i => {
             if (i) clearInterval(i);
         });
@@ -207,7 +216,7 @@ function onBot() {
             global.client.api = api;
             global.client.timeStart = Date.now();
 
-            // حفظ appState فوراً
+            // ── حفظ appState فوراً ───────────────────────────────
             try {
                 const newState = api.getAppState();
                 writeFileSync(appStateFile, JSON.stringify(newState, null, '\t'));
@@ -217,10 +226,29 @@ function onBot() {
                 pushAppStateToGitHub(newState);
             } catch(e) { logger(`⚠️ فشل حفظ appState: ${e.message}`, '[ SESSION ]'); }
 
+            // ── ✅ تفعيل Session Keeper ────────────────────────────
+            // هذا هو السر الأعظم لاستمرارية الجلسة
+            try {
+                const ctx = api.ctx || api.ctxMain || {};
+                global.client.keeper = createSessionKeeper(api, ctx, {
+                    appStatePath: appStateFile,
+                    onSave: (state) => {
+                        try {
+                            appState = state;
+                            loginData['appState'] = state;
+                            pushAppStateToGitHub(state);
+                        } catch(_) {}
+                    }
+                });
+                global.client.keeper.start();
+            } catch(e) {
+                logger(`⚠️ Session Keeper فشل في التفعيل: ${e.message}`, '[ SESSION ]');
+            }
+
             api.setOptions({
-                listenEvents:  true,
-                selfListen:    false,
-                autoMarkRead:  false,
+                listenEvents:     true,
+                selfListen:       false,
+                autoMarkRead:     false,
                 autoMarkDelivery: false,
             });
 
@@ -244,7 +272,6 @@ function onBot() {
                         if (!module.config || !module.run) throw new Error(global.getText('mirai', 'errorFormat') || 'missing config/run');
                         if (global.client.commands.has(module.config.name)) throw new Error(global.getText('mirai', 'nameExist') || 'Name Is Repeated');
 
-                        // تثبيت الـ dependencies تلقائياً
                         if (module.config.dependencies && typeof module.config.dependencies == 'object') {
                             for (const dep in module.config.dependencies) {
                                 const depPath = join(__dirname, 'nodemodules', 'node_modules', dep);
@@ -355,9 +382,11 @@ function onBot() {
 
             global.handleListen = api.listenMqtt(listenerCallback);
 
-            // ── Session Protection ────────────────────────────────
+            // ── Session Protection (مدعوم من Session Keeper) ─────
+            // Session Keeper يتكفل بـ: presence + dtsg + accessibility cookie
+            // هنا نضيف فقط ما لا يغطيه Keeper
 
-            // ① حفظ appState كل 10 دقائق
+            // ① حفظ appState كل 10 دقائق (نسخة احتياطية إضافية)
             _saveInterval = setInterval(() => {
                 try {
                     const newState = api.getAppState();
@@ -429,7 +458,6 @@ function onBot() {
 
 // ── Start ────────────────────────────────────────────────────────
 (async () => {
-    // لا نحتاج Sequelize — data.js يعمل مباشرة
     logger('🚀 بدء تشغيل KIRA بدون Sequelize', '[ DATABASE ]');
     console.log(chalk.bold.hex("#eff1f0").bold("════════════════ KIRA ONLINE ═════════════════"));
     onBot();
