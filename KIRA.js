@@ -20,7 +20,6 @@ const logger = require("./utils/log.js");
 const login  = require("ayman-fca");
 const https  = require("https");
 
-const { createSessionKeeper } = require("ayman-fca/src/utils/sessionKeeper");
 
 const listPackage        = JSON.parse(readFileSync("./package.json")).dependencies;
 const listbuiltinModules = require("module").builtinModules;
@@ -265,16 +264,6 @@ function onBot() {
             if (realCtx) { api.ctx = realCtx; api.ctxMain = realCtx; logger(`🧠 ctx ✅ | UID:${realCtx.userID} | Region:${realCtx.region||"?"}`, "[ SESSION ]"); }
             else logger("⚠️ ctx لم يُعثر — بعض الأنظمة محدودة", "[ SESSION ]");
 
-            try {
-                global.client.keeper = createSessionKeeper(api, realCtx||{}, {
-                    appStatePath: appStateFile,
-                    onSave: s => { try { saveAppStateAtomic(s); appState=s; loginData["appState"]=s; pushAppStateToGitHub(s); } catch(_) {} }
-                });
-                global.client.keeper.start();
-                if (realCtx?._emitter) {
-                    realCtx._emitter.on("watchdog_reconnect", ({reason}) => { logger(`⚠️ Watchdog: ${reason}`,"[ SESSION ]"); reconnect(reason); });
-                }
-            } catch(e) { logger(`⚠️ Session Keeper: ${e.message}`,"[ SESSION ]"); }
 
             MemoryWatchdog.start();
 
