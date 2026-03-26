@@ -9,10 +9,12 @@ function loadConfig() {
   ]) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch(_){} }
   return {};
 }
+
 const CFG       = loadConfig();
-const ADMIN_IDS = (CFG.ADMINBOT || ['61580139921634']).map(String);
+const BOT_NAME  = CFG.BOTNAME || 'BOT';
+const ADMIN_IDS = (CFG.ADMINBOT || []).map(String);
 const GH_TOKEN  = CFG.GITHUB_TOKEN;
-const GH_REPO   = CFG.GITHUB_REPO || 'aymkira/KENO';
+const GH_REPO   = CFG.GITHUB_REPO || '';
 const ROOT      = process.cwd();
 
 // ── GitHub API ────────────────────────────────────────────────
@@ -25,7 +27,7 @@ function ghRequest(method, endpoint, body = null) {
       method,
       headers: {
         'Authorization': `token ${GH_TOKEN}`,
-        'User-Agent':    'KIRA-Bot',
+        'User-Agent':    `${BOT_NAME}-Bot`,
         'Accept':        'application/vnd.github.v3+json',
         'Content-Type':  'application/json',
         ...(data ? { 'Content-Length': Buffer.byteLength(data) } : {}),
@@ -60,31 +62,26 @@ async function pushToGitHub(filePath, content, message) {
   return await ghRequest('PUT', `/contents/${enc}`, body);
 }
 
-// ── تحقق من تفعيل الحماية ─────────────────────────────────────
 function isGuardEnabled(threadID) {
-  // أولاً من global.config
-  const guards = global.config?.guardGroups || [];
-  return guards.includes(String(threadID));
+  return (global.config?.guardGroups || []).includes(String(threadID));
 }
 
-// ══════════════════════════════════════════════════════════════
-//  CONFIG
-// ══════════════════════════════════════════════════════════════
-module.exports.config = {
-  name:        'حماية',
-  aliases:     ['guard'],
-  eventType:   ['log:thread-admins', 'log:unsubscribe'],
-  version:     '1.0.0',
-  hasPermssion: 2,
-  credits:     'ayman',
-  description: 'حماية الكروب — يمنع تغيير الأدمن ويرجع المطور',
-  commandCategory: 'developer',
-  usages:      '.حماية اون — تفعيل\n.حماية اوف — إيقاف\n.حماية — الحالة',
-  cooldowns:   3,
-};
+const H = `⌬ ━━ ${BOT_NAME} GUARD ━━ ⌬`;
 
 // ══════════════════════════════════════════════════════════════
-//  EVENT — يشتغل دائماً حتى لو ما فيه أوامر
+module.exports.config = {
+  name:            'حماية',
+  aliases:         ['guard'],
+  eventType:       ['log:thread-admins', 'log:unsubscribe'],
+  version:         '2.0.0',
+  hasPermssion:    2,
+  credits:         'ayman',
+  description:     'حماية الكروب — يمنع تغيير الأدمن ويرجع المطور',
+  commandCategory: 'developer',
+  usages:          '.حماية اون | .حماية اوف | .حماية',
+  cooldowns:       3,
+};
+
 // ══════════════════════════════════════════════════════════════
 module.exports.run = async function({ api, event, args, Threads, Users }) {
   const { threadID, messageID, senderID, logMessageType, logMessageData } = event;
@@ -98,21 +95,20 @@ module.exports.run = async function({ api, event, args, Threads, Users }) {
     const sub     = (args[0] || '').trim().toLowerCase();
     const current = isGuardEnabled(threadID);
 
-    if (!sub || (sub !== 'اون' && sub !== 'اوف' && sub !== 'on' && sub !== 'off')) {
+    if (!sub || !['اون','اوف','on','off'].includes(sub)) {
       return api.sendMessage(
-        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗨𝗔𝗥𝗗 ━━ ⌬\n\n🛡️ حالة الحماية\n${current ? '🟢 مفعّلة' : '🔴 معطّلة'}\n\n• .حماية اون\n• .حماية اوف`,
+        `${H}\n\n🛡️ الحماية: ${current ? '🟢 مفعّلة' : '🔴 معطّلة'}\n\n• .حماية اون\n• .حماية اوف`,
         threadID, messageID
       );
     }
 
     const enable = sub === 'اون' || sub === 'on';
-    if (enable && current)  return api.sendMessage('⚠️ الحماية مفعّلة أصلاً!', threadID, messageID);
+    if (enable && current)   return api.sendMessage('⚠️ الحماية مفعّلة أصلاً!', threadID, messageID);
     if (!enable && !current) return api.sendMessage('⚠️ الحماية معطّلة أصلاً!', threadID, messageID);
 
     const wait = await api.sendMessage('⏳ جاري التحديث...', threadID);
 
     try {
-      // ① تحديث config محلياً
       const configPath = path.join(ROOT, 'config.json');
       const cfg        = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       if (!cfg.guardGroups) cfg.guardGroups = [];
@@ -124,24 +120,18 @@ module.exports.run = async function({ api, event, args, Threads, Users }) {
       }
 
       fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8');
+      global.config = cfg;
 
-      // ② رفع لـ GitHub
       let ghStatus = '⚠️ TOKEN مفقود';
       if (GH_TOKEN) {
         const res = await pushToGitHub('config.json', JSON.stringify(cfg, null, 2),
-          `${enable ? '🟢 تفعيل' : '🔴 إيقاف'} حماية ${threadID} — KIRA`);
+          `${enable ? '🟢' : '🔴'} حماية ${threadID} — ${BOT_NAME}`);
         ghStatus = (res.status === 200 || res.status === 201) ? '✅' : `❌ (${res.status})`;
       }
 
-      // ③ تحديث الذاكرة
-      global.config = cfg;
-
       api.unsendMessage(wait.messageID);
       return api.sendMessage(
-        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗨𝗔𝗥𝗗 ━━ ⌬\n\n${enable
-          ? '🟢 تم تفعيل الحماية!\n🛡️ لا أحد يقدر يغير الأدمن'
-          : '🔴 تم إيقاف الحماية!'
-        }\n🐙 GitHub: ${ghStatus}`,
+        `${H}\n\n${enable ? '🟢 تم تفعيل الحماية!' : '🔴 تم إيقاف الحماية!'}\n🐙 GitHub: ${ghStatus}`,
         threadID, messageID
       );
     } catch(e) {
@@ -150,11 +140,7 @@ module.exports.run = async function({ api, event, args, Threads, Users }) {
     }
   }
 
-  // ══════════════════════════════════════════════════════════
-  //  EVENT HANDLER
-  // ══════════════════════════════════════════════════════════
-
-  // ── تغيير الأدمن ─────────────────────────────────────────
+  // ── تغيير الأدمن ─────────────────────────────────────────────
   if (logMessageType === 'log:thread-admins') {
     if (!isGuardEnabled(threadID)) return;
 
@@ -163,78 +149,68 @@ module.exports.run = async function({ api, event, args, Threads, Users }) {
     const isAdd    = logMessageData.ADMIN_EVENT === 'add_admin';
     const isRemove = logMessageData.ADMIN_EVENT === 'remove_admin';
 
-    // البوت أو المطور هو اللي غيّر — مقبول
     if (author === botID || ADMIN_IDS.includes(author)) return;
 
     // محاولة نزول البوت من الأدمن
     if (isRemove && targetID === botID) {
-      // أرجع البوت أدمن + نزّل المحاول من الأدمن فقط
       api.changeAdminStatus(threadID, botID, true);
       api.changeAdminStatus(threadID, author, false);
       return api.sendMessage(
-        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗨𝗔𝗥𝗗 ━━ ⌬\n\n🛡️ محاولة نزول البوت من الأدمن!\n🆔 ${author}\n⚡ تم نزوله من الأدمن`,
+        `${H}\n\n🛡️ حاولوا ينزلوني من الأدمن!\n🆔 ${author}\n⚡ تم نزوله`,
         threadID
       );
     }
 
     // محاولة نزول المطور من الأدمن
     if (isRemove && ADMIN_IDS.includes(targetID)) {
-      // أرجع المطور أدمن + نزّل المحاول من الأدمن فقط
       api.changeAdminStatus(threadID, targetID, true);
       api.changeAdminStatus(threadID, author, false);
       const name = await Users.getNameUser(targetID).catch(() => targetID);
       return api.sendMessage(
-        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗨𝗔𝗥𝗗 ━━ ⌬\n\n🛡️ محاولة نزول المطور من الأدمن!\n👑 المطور: ${name}\n🆔 المحاول: ${author}\n⚡ تم نزوله من الأدمن`,
+        `${H}\n\n🛡️ حاولوا ينزلوا المطور!\n👑 ${name}\n⚡ تم نزول المحاول`,
         threadID
       );
     }
 
-    // إضافة شخص غير مصرح كأدمن — نزّل المضاف فقط
+    // إضافة أدمن غير مصرح
     if (isAdd && !ADMIN_IDS.includes(targetID) && targetID !== botID) {
       api.changeAdminStatus(threadID, targetID, false);
       return api.sendMessage(
-        `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗨𝗔𝗥𝗗 ━━ ⌬\n\n🛡️ إضافة أدمن غير مصرح!\n🆔 المضاف: ${targetID}\n⚡ تم نزوله من الأدمن`,
+        `${H}\n\n🛡️ إضافة أدمن غير مصرح!\n🆔 ${targetID}\n⚡ تم إلغاء الصلاحية`,
         threadID
       );
     }
   }
 
-  // ── طرد البوت أو المطور ──────────────────────────────────
+  // ── طرد البوت أو المطور ──────────────────────────────────────
   if (logMessageType === 'log:unsubscribe') {
     const leftID = String(logMessageData?.leftParticipantFbId || '');
     const adder  = String(logMessageData?.addedBy || event.author || '');
 
-    // لو البوت اتطرد وفيه حماية مفعّلة على هذا الكروب
+    // البوت اتطرد
     if (leftID === botID && isGuardEnabled(threadID)) {
-      // رجّع البوت للكروب
       setTimeout(() => {
-        api.addUserToGroup(botID, threadID, (err) => {
-          if (!err) {
-            api.sendMessage(
-              `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗨𝗔𝗥𝗗 ━━ ⌬\n\n🛡️ حاولوا يطردوني وأنا رجعت! 😏\n⚡ الحماية مفعّلة`,
-              threadID
-            );
-          }
+        api.addUserToGroup(botID, threadID, err => {
+          if (!err) api.sendMessage(
+            `${H}\n\n🛡️ حاولوا يطردوني — رجعت! 😏`,
+            threadID
+          );
         });
       }, 2000);
       return;
     }
 
-    // لو المطور اتطرد من أي كروب فيه البوت
+    // المطور اتطرد
     if (ADMIN_IDS.includes(leftID)) {
-      setTimeout(() => {
-        api.addUserToGroup(leftID, threadID, async (err) => {
-          if (!err) {
-            const name = await Users.getNameUser(leftID).catch(() => leftID);
-            // ينزّل اللي طرده من الأدمن
-            if (adder && adder !== botID) {
-              api.changeAdminStatus(threadID, adder, false);
-            }
-            api.sendMessage(
-              `⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗨𝗔𝗥𝗗 ━━ ⌬\n\n👑 ${name} اتطرد وأنا رجّعته!\n⚡ تم نزول صلاحية الطارد`,
-              threadID
-            );
-          }
+      setTimeout(async () => {
+        api.addUserToGroup(leftID, threadID, async err => {
+          if (err) return;
+          const name = await Users.getNameUser(leftID).catch(() => leftID);
+          if (adder && adder !== botID) api.changeAdminStatus(threadID, adder, false);
+          api.sendMessage(
+            `${H}\n\n👑 ${name} اتطرد — رجّعته!\n⚡ تم نزول صلاحية الطارد`,
+            threadID
+          );
         });
       }, 2000);
     }
