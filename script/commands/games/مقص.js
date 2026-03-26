@@ -1,6 +1,22 @@
+const path  = require("path");
+const axios = require("axios");
+const fs    = require("fs-extra");
+
+function getDB() {
+  try { return require(path.join(process.cwd(), "includes", "data.js")); }
+  catch { return null; }
+}
+
+function getBotName() {
+  try {
+    const cfg = require(path.join(process.cwd(), "config.json"));
+    return cfg.BOTNAME || "BOT";
+  } catch { return "BOT"; }
+}
+
 module.exports.config = {
     name: "مقص",
-    version: "2.0.0",
+    version: "2.2.0",
     hasPermssion: 0,
     credits: "أيمن",
     description: "لعبة حجر ورقة مقص مع رهان",
@@ -9,12 +25,10 @@ module.exports.config = {
     cooldowns: 10
 };
 
-module.exports.run = async function ({ api, event, args, Currencies }) {
+module.exports.run = async function ({ api, event, args }) {
     const { threadID, messageID, senderID } = event;
     const H = "⌬ ━━━━━━━━━━━━ ⌬";
-    const axios = global.nodemodule["axios"];
-    const fs = global.nodemodule["fs-extra"];
-
+    const BOT = getBotName();
     const items = ["مقص", "حجر", "ورق"];
     const emoji = ["✌️", "👊", "✋"];
 
@@ -22,23 +36,20 @@ module.exports.run = async function ({ api, event, args, Currencies }) {
     const bet = parseInt(args[1]);
 
     if (!userChoice || !items.includes(userChoice))
-        return api.sendMessage(
-            `${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n❓ الاستخدام الصحيح:\n\n⪼ مقص حجر 500\n⪼ مقص ورق 500\n⪼ مقص مقص 500\n\n${H}`,
-            threadID, messageID
-        );
+        return api.sendMessage(`${H}\n⌬ ━━ ${BOT} GAMES ━━ ⌬\n${H}\n\n❓ الاستخدام الصحيح:\n\n⪼ مقص حجر 500\n⪼ مقص ورق 500\n⪼ مقص مقص 500\n\n${H}`, threadID, messageID);
 
     if (!bet || isNaN(bet) || bet < 50)
-        return api.sendMessage(
-            `${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n⚠️ الحد الأدنى للرهان: 50$\n\n${H}`,
-            threadID, messageID
-        );
+        return api.sendMessage(`${H}\n⌬ ━━ ${BOT} GAMES ━━ ⌬\n${H}\n\n⚠️ الحد الأدنى للرهان: 50$\n\n${H}`, threadID, messageID);
 
-    const money = (await Currencies.getData(senderID)).money;
+    const db = getDB();
+    if (!db) return api.sendMessage("❌ data.js غير موجود", threadID, messageID);
+
+    await db.ensureUser(senderID);
+    const wallet = await db.getWallet(senderID);
+    const money  = wallet.money ?? 0;
+
     if (bet > money)
-        return api.sendMessage(
-            `${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n💸 رصيدك ما يكفي!\n\n⪼ رصيدك: ${money.toLocaleString()}$\n⪼ الرهان: ${bet.toLocaleString()}$\n\n${H}`,
-            threadID, messageID
-        );
+        return api.sendMessage(`${H}\n⌬ ━━ ${BOT} GAMES ━━ ⌬\n${H}\n\n💸 رصيدك ما يكفي!\n\n⪼ رصيدك: ${money.toLocaleString()}$\n⪼ الرهان: ${bet.toLocaleString()}$\n\n${H}`, threadID, messageID);
 
     const botChoice = items[Math.floor(Math.random() * items.length)];
     const ui = items.indexOf(userChoice);
@@ -55,9 +66,9 @@ module.exports.run = async function ({ api, event, args, Currencies }) {
         "https://i.imgur.com/2WSbVaK.jpg"
     ];
 
-    const dl = async (url, path) => {
+    const dl = async (url, p) => {
         const r = await axios.get(url, { responseType: "arraybuffer" });
-        fs.writeFileSync(path, Buffer.from(r.data));
+        fs.writeFileSync(p, Buffer.from(r.data));
     };
 
     const p1 = __dirname + `/cache/rps_u.png`;
@@ -66,23 +77,25 @@ module.exports.run = async function ({ api, event, args, Currencies }) {
     await dl(imgLinks[ui], p1);
     await dl(imgLinks[bi], p2);
 
-    let resultText, moneyChange;
+    let resultText, moneyChange, finalMoney;
     if (result === "win") {
-        await Currencies.increaseMoney(senderID, bet);
+        await db.addMoney(senderID, bet);
+        finalMoney  = money + bet;
         moneyChange = `+${bet.toLocaleString()}$`;
-        resultText = "✅ فزت!";
+        resultText  = "✅ فزت!";
     } else if (result === "lose") {
-        await Currencies.decreaseMoney(senderID, bet);
+        await db.removeMoney(senderID, bet);
+        finalMoney  = money - bet;
         moneyChange = `-${bet.toLocaleString()}$`;
-        resultText = "❌ خسرت!";
+        resultText  = "❌ خسرت!";
     } else {
-        resultText = "🤝 تعادل!";
+        finalMoney  = money;
+        resultText  = "🤝 تعادل!";
         moneyChange = "0$";
     }
 
     return api.sendMessage({
-        body: `${H}\n⌬ ━━ 𝗞𝗘𝗡𝗢 GAMES ━━ ⌬\n${H}\n\n${emoji[ui]} أنت: ${userChoice}  ━  البوت: ${botChoice} ${emoji[bi]}\n\n${resultText}\n\n⪼ التغيير: ${moneyChange}\n⪼ رصيدك: ${((await Currencies.getData(senderID)).money).toLocaleString()}$\n\n${H}`,
+        body: `${H}\n⌬ ━━ ${BOT} GAMES ━━ ⌬\n${H}\n\n${emoji[ui]} أنت: ${userChoice}  ━  البوت: ${botChoice} ${emoji[bi]}\n\n${resultText}\n\n⪼ التغيير: ${moneyChange}\n⪼ رصيدك: ${finalMoney.toLocaleString()}$\n\n${H}`,
         attachment: [fs.createReadStream(p1), fs.createReadStream(p2)]
     }, threadID, messageID);
 };
-
