@@ -20,7 +20,7 @@
     "@anthropic-ai/sdk": "^0.79.0",
     "archiver": "^7.0.1",
     "async": "^3.2.6",
-    "ayman-fca": "^1.0.3",
+    "ayman-fca": "^1.0.4",
     "axios": "^1.7.9",
     "axios-retry": "^4.5.0",
     "bad-words": "^4.0.0",
