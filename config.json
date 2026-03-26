@@ -12,10 +12,10 @@
   "NOTIFICATION": true,
   "commandDisabled": [],
   "eventDisabled": [],
-  "EMAIL": "kk1000bot@gmail.com",
-  "PASSWORD": "ayman2008?",
+  "EMAIL": "",
+  "PASSWORD": "",
   "OTPKEY": "",
-  "BOTNAME": "𝐤𝐢𝐫𝐚",
+  "BOTNAME": "𝙙𝙤𝙧𝙖",
   "PREFIX": ".",
   "ADMINBOT": [
     "61580139921634"
@@ -23,7 +23,7 @@
   "MODEL_API_KEY": "al-3_TKYAQrBNjO_EWrbSMenJqXAH5-jnAa61lesclZSjQ",
   "iconUnsend": {
     "status": true,
-    "icon": "😡"
+    "icon": "😢"
   },
   "AppStateEncryption": true,
   "RestartEvery": "30",
