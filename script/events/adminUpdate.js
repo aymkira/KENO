@@ -1,6 +1,18 @@
 const fs   = require("fs");
 const path = require("path");
 
+function loadConfig() {
+  for (const p of [
+    path.join(__dirname, '../../..', 'config.json'),
+    path.join(process.cwd(), 'config.json'),
+  ]) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch(_){} }
+  return {};
+}
+
+const CFG      = loadConfig();
+const BOT_NAME = CFG.BOTNAME || 'BOT';
+const HEADER   = `⌬ ━━ ${BOT_NAME} GROUP ━━ ⌬`;
+
 module.exports.config = {
   name:        "adminUpdate",
   eventType:   [
@@ -9,27 +21,32 @@ module.exports.config = {
     "log:link-status",   "log:magic-words", "log:thread-approval-mode",
     "log:thread-poll",
   ],
-  version:     "2.0.0",
+  version:     "3.0.0",
   credits:     "ayman",
   description: "تحديث معلومات المجموعة تلقائياً",
   envConfig: {
     autoUnsend:   true,
     sendNoti:     true,
-    timeToUnsend: 10,
+    timeToUnsend: 5,       // ← سريع: 5 ثواني بدل 10
   },
 };
 
-// ── helper: إرسال مع unsend تلقائي ──────────────────────────────
-async function sendAuto(api, threadID, msg) {
-  const cfg = global.configModule?.adminUpdate || {};
-  if (!cfg.sendNoti && cfg.sendNoti !== undefined) return;
+// ── مسار الأيقونات ─────────────────────────────────────────────
+const iconPath = path.join(__dirname, "emoji.json");
+if (!fs.existsSync(iconPath)) fs.writeFileSync(iconPath, "{}");
 
-  api.sendMessage(msg, threadID, async (err, info) => {
+// ── helper: إرسال مع unsend سريع ──────────────────────────────
+async function sendAuto(api, threadID, msg, attachments = null) {
+  const cfg   = global.configModule?.adminUpdate || module.exports.config.envConfig;
+  if (cfg.sendNoti === false) return;
+
+  const payload = attachments ? { body: msg, attachment: attachments } : msg;
+
+  api.sendMessage(payload, threadID, async (err, info) => {
     if (err || !info) return;
-    if (cfg.autoUnsend) {
-      const delay = (cfg.timeToUnsend || 10) * 1000;
-      await new Promise(r => setTimeout(r, delay));
-      api.unsendMessage(info.messageID);
+    if (cfg.autoUnsend !== false) {
+      const delay = (cfg.timeToUnsend || 5) * 1000;
+      setTimeout(() => api.unsendMessage(info.messageID), delay);
     }
   });
 }
@@ -42,17 +59,11 @@ function formatDuration(secs) {
   return [h, m, s].map(n => String(n).padStart(2, "0")).join(":");
 }
 
-const HEADER = "⌬ ━━ 𝗞𝗜𝗥𝗔 𝗚𝗥𝗢𝗨𝗣 ━━ ⌬";
-
-// ── مسار ملف الأيقونات ─────────────────────────────────────────
-const iconPath = path.join(__dirname, "emoji.json");
-if (!fs.existsSync(iconPath)) fs.writeFileSync(iconPath, "{}");
-
+// ── الحدث الرئيسي ──────────────────────────────────────────────
 module.exports.run = async function ({ event, api, Threads, Users }) {
   const { author, threadID, logMessageType, logMessageData, logMessageBody } = event;
   const { setData, getData } = Threads;
 
-  // تجاهل الأحداث التلقائية
   if (author == threadID) return;
 
   try {
@@ -71,19 +82,23 @@ module.exports.run = async function ({ event, api, Threads, Users }) {
             dataThread.adminIDs.push({ id: targetID });
 
           const name = await Users.getNameUser(targetID).catch(() => targetID);
-          await sendAuto(api, threadID, `${HEADER}\n\n⚜️ تم تعيين مسؤول جديد!\n👤 ${name}\n🆔 ${targetID}`);
+          await sendAuto(api, threadID,
+            `${HEADER}\n\n⬆️ ترقية مسؤول!\n👤 الاسم: ${name}\n🆔 ${targetID}`
+          );
         }
         else if (logMessageData.ADMIN_EVENT === "remove_admin") {
           const targetID = logMessageData.TARGET_ID;
           dataThread.adminIDs = dataThread.adminIDs.filter(a => a.id != targetID);
 
           const name = await Users.getNameUser(targetID).catch(() => targetID);
-          await sendAuto(api, threadID, `${HEADER}\n\n⚜️ تم إزالة مسؤول!\n👤 ${name}\n🆔 ${targetID}`);
+          await sendAuto(api, threadID,
+            `${HEADER}\n\n⬇️ إزالة مسؤول!\n👤 الاسم: ${name}\n🆔 ${targetID}`
+          );
         }
         break;
       }
 
-      // ── تغيير اسم العضو ──────────────────────────────────────
+      // ── تغيير كنية العضو ─────────────────────────────────────
       case "log:user-nickname": {
         if (!dataThread.nicknames) dataThread.nicknames = {};
         const uid  = logMessageData.participant_id;
@@ -92,20 +107,21 @@ module.exports.run = async function ({ event, api, Threads, Users }) {
 
         const name = await Users.getNameUser(uid).catch(() => uid);
         const msg  = nick.length
-          ? `${HEADER}\n\n✏️ تم تغيير الكنية!\n👤 ${name}\n📝 ${nick}`
-          : `${HEADER}\n\n✏️ تم حذف كنية!\n👤 ${name}`;
+          ? `${HEADER}\n\n✏️ تغيير كنية!\n👤 ${name}\n📝 ${nick}`
+          : `${HEADER}\n\n🗑️ حُذفت كنية!\n👤 ${name}`;
         await sendAuto(api, threadID, msg);
         break;
       }
 
       // ── تغيير اسم المجموعة ───────────────────────────────────
       case "log:thread-name": {
+        const oldName = dataThread.threadName || "—";
         const newName = logMessageData.name || null;
         dataThread.threadName = newName;
 
         const msg = newName
-          ? `${HEADER}\n\n📝 تم تغيير اسم المجموعة!\n🏷️ ${newName}`
-          : `${HEADER}\n\n📝 تم حذف اسم المجموعة!`;
+          ? `${HEADER}\n\n📝 تغيير اسم المجموعة!\n⬅️ ${oldName}\n➡️ ${newName}`
+          : `${HEADER}\n\n🗑️ تم حذف اسم المجموعة!\n⬅️ ${oldName}`;
         await sendAuto(api, threadID, msg);
         break;
       }
@@ -119,17 +135,17 @@ module.exports.run = async function ({ event, api, Threads, Users }) {
         const newIcon  = logMessageData.thread_icon || "👍";
         dataThread.threadIcon = newIcon;
 
-        const cfg = global.configModule?.adminUpdate || {};
+        const cfg = global.configModule?.adminUpdate || module.exports.config.envConfig;
         if (cfg.sendNoti !== false) {
           api.sendMessage(
-            `${HEADER}\n\n🎭 تم تغيير أيقونة المجموعة!\n⬅️ ${prevIcon}  →  ${newIcon}`,
+            `${HEADER}\n\n🎭 تغيير أيقونة المجموعة!\n⬅️ ${prevIcon}  →  ${newIcon}`,
             threadID,
-            async (err, info) => {
+            (err, info) => {
               icons[threadID] = newIcon;
-              fs.writeFileSync(iconPath, JSON.stringify(icons));
-              if (!err && info && cfg.autoUnsend) {
-                await new Promise(r => setTimeout(r, (cfg.timeToUnsend || 10) * 1000));
-                api.unsendMessage(info.messageID);
+              fs.writeFileSync(iconPath, JSON.stringify(icons, null, 2));
+              if (!err && info && cfg.autoUnsend !== false) {
+                const delay = (cfg.timeToUnsend || 5) * 1000;
+                setTimeout(() => api.unsendMessage(info.messageID), delay);
               }
             }
           );
@@ -139,8 +155,12 @@ module.exports.run = async function ({ event, api, Threads, Users }) {
 
       // ── تغيير لون المجموعة ───────────────────────────────────
       case "log:thread-color": {
-        dataThread.threadColor = logMessageData.thread_color || null;
-        await sendAuto(api, threadID, `${HEADER}\n\n🎨 ${logMessageBody || "تم تغيير لون المجموعة"}`);
+        const newColor = logMessageData.thread_color || null;
+        const oldColor = dataThread.threadColor || "—";
+        dataThread.threadColor = newColor;
+        await sendAuto(api, threadID,
+          `${HEADER}\n\n🎨 تغيير لون المجموعة!\n⬅️ ${oldColor}  →  ${newColor || "—"}`
+        );
         break;
       }
 
@@ -154,7 +174,7 @@ module.exports.run = async function ({ event, api, Threads, Users }) {
         else if (logMessageData.event === "group_call_ended") {
           const duration = formatDuration(logMessageData.call_duration || 0);
           const type     = logMessageData.video ? "الفيديو 📹" : "الصوتية 🎙️";
-          await sendAuto(api, threadID, `${HEADER}\n\n📞 انتهت المكالمة ${type}\n⏱️ المدة: ${duration}`);
+          await sendAuto(api, threadID, `${HEADER}\n\n📵 انتهت المكالمة ${type}\n⏱️ المدة: ${duration}`);
         }
         else if (logMessageData.joining_user) {
           const name = await Users.getNameUser(logMessageData.joining_user).catch(() => logMessageData.joining_user);
@@ -166,29 +186,34 @@ module.exports.run = async function ({ event, api, Threads, Users }) {
 
       // ── كلمات سحرية ──────────────────────────────────────────
       case "log:magic-words": {
-        const word  = logMessageData.magic_word  || "—";
-        const theme = logMessageData.theme_name  || "—";
-        const emoji = logMessageData.emoji_effect || "لا يوجد";
+        const word  = logMessageData.magic_word    || "—";
+        const theme = logMessageData.theme_name    || "—";
+        const emoji = logMessageData.emoji_effect  || "لا يوجد";
         const count = logMessageData.new_magic_word_count || 0;
-        await sendAuto(api, threadID, `${HEADER}\n\n✨ كلمة سحرية جديدة!\n💬 ${word} → ${theme}\n😀 ${emoji}\n📊 المجموع: ${count}`);
+        await sendAuto(api, threadID,
+          `${HEADER}\n\n✨ كلمة سحرية جديدة!\n💬 ${word} → ${theme}\n😀 ${emoji}\n📊 المجموع: ${count}`
+        );
         break;
       }
 
       // ── تصويت ────────────────────────────────────────────────
       case "log:thread-poll": {
-        if (logMessageBody) await sendAuto(api, threadID, `${HEADER}\n\n📊 ${logMessageBody}`);
+        if (logMessageBody)
+          await sendAuto(api, threadID, `${HEADER}\n\n📊 ${logMessageBody}`);
         break;
       }
 
       // ── وضع الموافقة على الطلبات ─────────────────────────────
       case "log:thread-approval-mode": {
-        if (logMessageBody) await sendAuto(api, threadID, `${HEADER}\n\n🔒 ${logMessageBody}`);
+        if (logMessageBody)
+          await sendAuto(api, threadID, `${HEADER}\n\n🔒 ${logMessageBody}`);
         break;
       }
 
       // ── وضع الرابط ───────────────────────────────────────────
       case "log:link-status": {
-        if (logMessageBody) await sendAuto(api, threadID, `${HEADER}\n\n🔗 ${logMessageBody}`);
+        if (logMessageBody)
+          await sendAuto(api, threadID, `${HEADER}\n\n🔗 ${logMessageBody}`);
         break;
       }
     }
@@ -197,6 +222,6 @@ module.exports.run = async function ({ event, api, Threads, Users }) {
     await setData(threadID, { threadInfo: dataThread });
 
   } catch(e) {
-    console.error("[adminUpdate]", e.message);
+    console.error(`[${BOT_NAME} adminUpdate]`, e.message);
   }
 };
