@@ -1,19 +1,35 @@
-const fs   = require("fs");
+const fs    = require("fs");
+const path  = require("path");
 const axios = require("axios");
+
+function loadConfig() {
+  for (const p of [
+    path.join(__dirname, '../../..', 'config.json'),
+    path.join(process.cwd(), 'config.json'),
+  ]) { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch(_){} }
+  return {};
+}
+
+function getDB() {
+  try { return require(path.join(process.cwd(), "includes", "data.js")); }
+  catch { return null; }
+}
+
+const CFG      = loadConfig();
+const BOT_NAME = CFG.BOTNAME || "BOT";
 
 module.exports.config = {
   name:      "تحكم_الجروب",
   eventType: ["log:subscribe", "log:unsubscribe"],
-  version:   "6.2.0",
+  version:   "7.0.0",
   credits:   "ayman",
-  description: "ترحيب ووداع بـ GIF — مع دعم غلق/فتح الكروب",
+  description: `${BOT_NAME} — ترحيب ووداع بـ GIF مع تسجيل سحابي`,
 };
 
 module.exports.run = async ({ api, event, Users, Threads }) => {
   const { threadID, logMessageType: logType, logMessageData: logData } = event;
   const botID = String(api.getCurrentUserID());
-
-  if (logType !== "log:subscribe" && logType !== "log:unsubscribe") return;
+  const db    = getDB();
 
   // ── جيب اسم الكروب ───────────────────────────────────────────
   let groupName = "الجروب";
@@ -22,58 +38,83 @@ module.exports.run = async ({ api, event, Users, Threads }) => {
     groupName  = info.threadName || "الجروب";
   } catch(_) {}
 
-  // ══════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════
   // 👋 انضمام
-  // ══════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════
   if (logType === "log:subscribe") {
     const addedIDs = logData?.addedParticipants;
     if (!addedIDs?.length) return;
 
-    // ① تحقق من antiJoin — لو الكروب مغلق لا ترسل ترحيب
+    // لو الكروب مغلق — لا ترسل ترحيب
     let isAntiJoin = false;
     try {
       const td   = await Threads.getData(threadID);
       isAntiJoin = td?.data?.antiJoin === true;
     } catch(_) {}
-
-    if (isAntiJoin) return; // antijoin.js سيتولى الطرد بدون ضجة
+    if (isAntiJoin) return;
 
     for (const user of addedIDs) {
       const userID = String(user.userFbId);
       if (!userID || userID === botID) continue;
+      if (global._kickedUsers?.has(userID))   continue;
+      if (global.data?.userBanned?.has(userID)) continue;
 
-      // ② تحقق من المطرودين الدائمين — لا ترحب بهم
-      const isKicked = global._kickedUsers?.has(userID);
-      if (isKicked) continue;
-
-      // ③ تحقق من المحظورين
-      const isBanned = global.data?.userBanned?.has(userID);
-      if (isBanned) continue;
+      // ── تحقق من السحابة: هل سبق وانضم لنفس الكروب؟ ─────────
+      let alreadyWelcomed = false;
+      if (db) {
+        try {
+          const rec = await db.getAnalysis(`join_${threadID}_${userID}`);
+          if (rec) alreadyWelcomed = true;
+        } catch(_) {}
+      }
 
       let name = global.data?.userName?.get(userID);
       if (!name) {
         try { name = await Users.getNameUser(userID); } catch(_) { name = "عضو جديد"; }
       }
 
-      await sendWithGif(
-        api, threadID,
-        `✨ نورت يا ${name}! ✨\nأهلاً وسهلاً في ${groupName} 🤍\n\nاتبع القوانين ولا تشاغب 😇`,
-        "https://media.giphy.com/media/10N247rib4BlVC/giphy.gif",
-        `welcome_${userID}`
-      );
+      if (!alreadyWelcomed) {
+        await sendWithGif(
+          api, threadID,
+          `✨ نورت يا ${name}!\nأهلاً وسهلاً في ${groupName} 🤍\n\nاتبع القوانين ولا تشاغب 😇`,
+          "https://media.giphy.com/media/10N247rib4BlVC/giphy.gif",
+          `welcome_${userID}`
+        );
+      }
+
+      // ── سجّل العضو في السحابة ─────────────────────────────────
+      if (db) {
+        try {
+          await db.ensureUser(userID, name);
+
+          // سجّل الانضمام في الأنالسيس كمفتاح خاص للكروب
+          await db.setAnalysis(`join_${threadID}_${userID}`, {
+            userID,
+            name,
+            threadID,
+            groupName,
+            joinedAt: new Date().toISOString(),
+            welcomed: !alreadyWelcomed,
+          });
+
+          await db.logEvent('member_join', {
+            userID, name, threadID, groupName,
+            rejoined: alreadyWelcomed,
+            at: new Date().toISOString(),
+          });
+        } catch(_) {}
+      }
     }
     return;
   }
 
-  // ══════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════
   // 🚪 مغادرة
-  // ══════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════
   if (logType === "log:unsubscribe") {
     const leftID = String(logData?.leftParticipantFbId || "");
     if (!leftID || leftID === botID) return;
-
-    // لو مطرود أو محظور — بلاش رسالة وداع
-    if (global._kickedUsers?.has(leftID)) return;
+    if (global._kickedUsers?.has(leftID))    return;
     if (global.data?.userBanned?.has(leftID)) return;
 
     let name = global.data?.userName?.get(leftID);
@@ -95,13 +136,23 @@ module.exports.run = async ({ api, event, Users, Threads }) => {
       "https://media.giphy.com/media/KRxcgvd5fLiWk/giphy.gif",
       `bye_${leftID}`
     );
+
+    // سجّل المغادرة في السحابة
+    if (db) {
+      try {
+        await db.logEvent('member_leave', {
+          userID: leftID, name, threadID, groupName,
+          at: new Date().toISOString(),
+        });
+      } catch(_) {}
+    }
     return;
   }
 };
 
 // ── helper: إرسال مع GIF ─────────────────────────────────────
 async function sendWithGif(api, threadID, body, gifURL, prefix) {
-  const gifPath = `${__dirname}/${prefix}_${Date.now()}.gif`;
+  const gifPath = path.join(__dirname, `${prefix}_${Date.now()}.gif`);
   try {
     const data = (await axios.get(gifURL, { responseType: "arraybuffer", timeout: 10000 })).data;
     fs.writeFileSync(gifPath, Buffer.from(data));
