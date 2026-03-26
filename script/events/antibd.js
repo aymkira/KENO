@@ -11,7 +11,7 @@ function loadConfig() {
 module.exports.config = {
   name:        "antibd",
   eventType:   ["log:user-nickname"],
-  version:     "2.0.0",
+  version:     "2.1.0",
   credits:     "ayman",
   description: "حماية كنية البوت والمطور — تفاعل 🚫 فقط",
 };
@@ -22,7 +22,7 @@ module.exports.run = async function({ api, event, Threads }) {
 
   const CFG      = loadConfig();
   const ADMINBOT = (CFG.ADMINBOT || []).map(String);
-  const BOTNAME  = CFG.BOTNAME || "KIRA";
+  const BOTNAME  = CFG.BOTNAME || "BOT";
   const botID    = String(api.getCurrentUserID());
   const authorID = String(author);
 
