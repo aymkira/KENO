@@ -1,9 +1,15 @@
-const fs = require("fs-extra");
+const fs   = require("fs-extra");
 const axios = require("axios");
+const path  = require("path");
+
+function getDB() {
+  try { return require(path.join(process.cwd(), "includes", "data.js")); }
+  catch { return null; }
+}
 
 module.exports.config = {
     name: "كهف",
-    version: "1.0.5",
+    version: "1.1.0",
     hasPermssion: 0,
     credits: "Ayman",
     description: "العمل في الكهوف للحصول على الأموال",
@@ -22,17 +28,13 @@ module.exports.onLoad = async () => {
     }
 };
 
-module.exports.handleReply = async ({ event, api, handleReply, Currencies }) => {
+module.exports.handleReply = async ({ event, api, handleReply }) => {
     const { threadID, messageID, senderID, body } = event;
     if (handleReply.author != senderID) return;
 
     const countries = {
-        "1": "فيتنام",
-        "2": "الصين",
-        "3": "اليابان",
-        "4": "تايلاند",
-        "5": "أمريكا",
-        "6": "كمبوديا"
+        "1": "فيتنام", "2": "الصين", "3": "اليابان",
+        "4": "تايلاند", "5": "أمريكا", "6": "كمبوديا"
     };
 
     if (!(body in countries)) return api.sendMessage("⚠️ اخـتـر رقـم مـن 1 إلـى 6 فـقـط.", threadID, messageID);
@@ -41,16 +43,14 @@ module.exports.handleReply = async ({ event, api, handleReply, Currencies }) => 
     const reward = Math.floor(Math.random() * 4501) + 500;
     const country = countries[body];
 
+    const db = getDB();
+    if (!db) return api.sendMessage("❌ data.js غير موجود", threadID, messageID);
+
     try {
-        await Currencies.increaseMoney(senderID, parseInt(reward));
+        await db.addMoney(senderID, reward);
         api.unsendMessage(handleReply.messageID);
-        
         return api.sendMessage(
-            `${header}\n` +
-            `✅ تـم الـعـمـل بـنـجـاح!\n` +
-            `⪼ الـمـكـان: كـهـوف [ ${country} ]\n` +
-            `⪼ الـمـبـلـغ: ${reward}$\n` +
-            `${header}`, 
+            `${header}\n✅ تـم الـعـمـل بـنـجـاح!\n⪼ الـمـكـان: كـهـوف [ ${country} ]\n⪼ الـمـبـلـغ: ${reward}$\n${header}`,
             threadID, messageID
         );
     } catch (e) {
@@ -64,15 +64,7 @@ module.exports.run = async ({ event, api }) => {
     const cachePath = __dirname + `/cache/cave.jpg`;
 
     const msg = {
-        body: `${header}\n\n` +
-            `1 ≻ فـيـتـنـام\n` +
-            `2 ≻ الـصـيـن\n` +
-            `3 ≻ الـيـابـان\n` +
-            `4 ≻ تـايـلانـد\n` +
-            `5 ≻ أمـريـكـا\n` +
-            `6 ≻ كـمـبـوديـا\n\n` +
-            `⪼ رد عـلـى الـرسـالـة بـرقـم الـدولـة.\n` +
-            `⌬ ━━━━━━━━━━━━ ⌬`,
+        body: `${header}\n\n1 ≻ فـيـتـنـام\n2 ≻ الـصـيـن\n3 ≻ الـيـابـان\n4 ≻ تـايـلانـد\n5 ≻ أمـريـكـا\n6 ≻ كـمـبـوديـا\n\n⪼ رد عـلـى الـرسـالـة بـرقـم الـدولـة.\n⌬ ━━━━━━━━━━━━ ⌬`,
         attachment: fs.existsSync(cachePath) ? fs.createReadStream(cachePath) : null
     };
 
