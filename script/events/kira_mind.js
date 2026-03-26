@@ -1,4 +1,4 @@
-// KIRA MIND v5.0 — GitHub JSON بدلاً من MongoDB
+// KIRA MIND v5.1 — MongoDB via data.js
 
 const https = require('https');
 const fs    = require('fs');
@@ -11,10 +11,12 @@ function loadConfig() {
   ]) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch(_){} }
   return {};
 }
+
 const CFG      = loadConfig();
-const GROQ_KEY = CFG.GROQ_API_KEY || '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';
+const GROQ_KEY = CFG.GROQ_API_KEY || '';
 const MODEL    = 'llama-3.3-70b-versatile';
-const ADMIN_ID = '61580139921634';
+const ADMIN_ID = String(CFG.ADMINBOT?.[0] || CFG.KIRA_CONF?.dev || '');
+const BOT_NAME = CFG.BOTNAME || 'BOT';
 
 function getDB() {
   try { return require(path.join(process.cwd(), 'includes', 'data.js')); }
@@ -24,9 +26,9 @@ function getDB() {
 module.exports.config = {
   name: 'kira_mind',
   eventType: ['message', 'message_reply'],
-  version: '5.0.0',
+  version: '5.1.0',
   credits: 'ayman',
-  description: 'KIRA MIND — يستمع ويحلل بصمت ويحفظ على GitHub',
+  description: `${BOT_NAME} MIND — يستمع ويحلل بصمت ويحفظ على MongoDB`,
 };
 
 const pending = new Map();
@@ -74,7 +76,7 @@ async function analyze(messages, userName, old, isAdmin) {
     : 'جديد';
 
   const adminNote = isAdmin
-    ? '\n⚠️ هذا المطور أيمن — حلل بصدق تام، دوّن علامات الاكتئاب والوحدة.'
+    ? '\n⚠️ هذا المطور — حلل بصدق تام، دوّن علامات الاكتئاب والوحدة.'
     : '';
 
   const prompt =
@@ -97,15 +99,14 @@ JSON فقط:
 // ── تحديث الملف ───────────────────────────────────
 async function updateProfile(userID, userName, a, isAdmin) {
   if (!a) return;
-  const db  = getDB();
+  const db = getDB();
   if (!db) return;
 
-  // يقرأ من analysis.json بدل users.json
-  const old = await db.getAnalysis(userID) || {};
+  const old = (await db.getAnalysis(userID))?.data || {};
   const merge = (a1 = [], a2 = [], max = 30) =>
     [...new Set([...a1, ...a2])].filter(Boolean).slice(0, max);
 
-  const n   = (old.totalMessages || 0) + 1;
+  const n    = (old.totalMessages || 0) + 1;
   const conf = Math.min(Math.round(5 + n * 1.2 + (n > 15 ? 15 : 0) + (n > 40 ? 15 : 0)), 98);
   const moodDelta = Math.abs((a.mood_score || 50) - (old.moodScore || 50));
 
@@ -138,7 +139,7 @@ async function updateProfile(userID, userName, a, isAdmin) {
     location:   a.location    || old.location   || '',
     lifePeriod: a.life_period  || old.lifePeriod || '',
     keyFacts:   merge(old.keyFacts, [
-      ...( a.key_facts || []),
+      ...(a.key_facts || []),
       ...(moodDelta >= 20 ? [`تغير مزاج: ${old.moodScore}→${a.mood_score}`] : []),
     ], 100),
     phrases:    merge(old.phrases, a.phrases, 30),
@@ -168,7 +169,7 @@ async function updateProfile(userID, userName, a, isAdmin) {
   });
 
   if (moodDelta >= 20)
-    console.log(`[ KIRA MIND ] ⚡ ${userName}: تغير مزاج ${moodDelta} نقطة`);
+    console.log(`[ ${BOT_NAME} MIND ] ⚡ ${userName}: تغير مزاج ${moodDelta} نقطة`);
 }
 
 // ── Event ──────────────────────────────────────────
@@ -177,7 +178,7 @@ module.exports.run = async function({ api, event }) {
     if (event.senderID === api.getCurrentUserID()) return;
     const body = event.body?.trim();
     if (!body || body.length < 2) return;
-    if (body.startsWith(global.client?.config?.PREFIX || '.')) return;
+    if (body.startsWith(global.client?.config?.PREFIX || CFG.PREFIX || '.')) return;
 
     const db = getDB();
     if (!db) return;
@@ -194,60 +195,64 @@ module.exports.run = async function({ api, event }) {
       if (!pending.has(userID)) pending.set(userID, []);
       const buf = pending.get(userID);
       buf.push(body);
-      console.log(`[ KIRA MIND ] ⏳ ${userName}: ${buf.length}/5`);
+      console.log(`[ ${BOT_NAME} MIND ] ⏳ ${userName}: ${buf.length}/5`);
       if (buf.length < 5) return;
       const bodies = [...buf];
       pending.delete(userID);
       const a = await analyze(bodies, userName, null, isAdmin);
       await updateProfile(userID, userName, a, isAdmin);
       await db.logEvent('new_profile', { userID, name: userName });
-      await db.ensureUser(userID, userName); // تسجيل في users.json أيضاً
-      console.log(`[ KIRA MIND ] ✅ ${userName}`);
+      await db.ensureUser(userID, userName);
+      console.log(`[ ${BOT_NAME} MIND ] ✅ ${userName}`);
       return;
     }
 
-    const a = await analyze(body, userName, existing, isAdmin);
+    const a = await analyze(body, userName, existing.data || existing, isAdmin);
     await updateProfile(userID, userName, a, isAdmin);
-    console.log(`[ KIRA MIND ] 👁️ ${userName}: ${a?.emotion || '—'}`);
+    console.log(`[ ${BOT_NAME} MIND ] 👁️ ${userName}: ${a?.emotion || '—'}`);
 
   } catch(e) {
-    console.error('[ KIRA MIND ] ❌', e.message);
+    console.error(`[ ${BOT_NAME} MIND ] ❌`, e.message);
   }
 };
 
 // ── دوال مُصدَّرة ─────────────────────────────────
-module.exports.getUser    = id => getDB()?.getAnalysis(String(id));
-module.exports.getAllUsers = ()  => getDB()?.getAllAnalysis() || [];
-module.exports.ADMIN_ID   = ADMIN_ID;
+module.exports.getUser     = id  => getDB()?.getAnalysis(String(id));
+module.exports.getAllUsers  = ()  => getDB()?.getAllAnalysis() || [];
+module.exports.ADMIN_ID    = ADMIN_ID;
+module.exports.BOT_NAME    = BOT_NAME;
 
 module.exports.formatReport = function(p, admin = false) {
-  const bar = '█'.repeat(Math.round((p.confidence||0)/10)) + '░'.repeat(10 - Math.round((p.confidence||0)/10));
+  const d = p.data || p; // يدعم الشكلين
+  const bar = '█'.repeat(Math.round((d.confidence||0)/10)) + '░'.repeat(10 - Math.round((d.confidence||0)/10));
   let r =
-`🧠 ${p.name} [${bar}] ${p.confidence||0}%
-💬 ${p.totalMessages||0} رسالة | 📅 ${p.lastSeen ? new Date(p.lastSeen).toLocaleDateString('ar') : '—'}
+`🧠 ${d.name} [${bar}] ${d.confidence||0}%
+💬 ${d.totalMessages||0} رسالة | 📅 ${d.lastSeen ? new Date(d.lastSeen).toLocaleDateString('ar') : '—'}
 
-🎭 ${p.mbti||'—'} | ${p.mood||'—'} (${p.moodScore||50}/100)
-⚡ ضغط: ${p.stress||0}% | 📍 ${p.lifePeriod||'—'}
+🎭 ${d.mbti||'—'} | ${d.mood||'—'} (${d.moodScore||50}/100)
+⚡ ضغط: ${d.stress||0}% | 📍 ${d.lifePeriod||'—'}
 
-🌟 ${(p.interests||[]).slice(0,5).join(' | ')||'—'}
-🔍 ${(p.hiddenInt||[]).slice(0,3).join(' | ')||'—'}
-😨 ${(p.fears||[]).slice(0,3).join(' | ')||'—'}
-✨ ${(p.dreams||[]).slice(0,3).join(' | ')||'—'}
+🌟 ${(d.interests||[]).slice(0,5).join(' | ')||'—'}
+🔍 ${(d.hiddenInt||[]).slice(0,3).join(' | ')||'—'}
+😨 ${(d.fears||[]).slice(0,3).join(' | ')||'—'}
+✨ ${(d.dreams||[]).slice(0,3).join(' | ')||'—'}
 
-👥 ${(p.importantPeople||[]).slice(0,4).map(x=>`${x.name}(${x.feel})`).join(', ')||'—'}
+👥 ${(d.importantPeople||[]).slice(0,4).map(x=>`${x.name}(${x.feel})`).join(', ')||'—'}
 
-💡 ${p.kiraStrat?.tone||'—'}
-✅ ${p.kiraStrat?.cheer||'—'}
-❌ ${(p.kiraStrat?.avoid||[]).slice(0,2).join(', ')||'—'}
+💡 ${d.kiraStrat?.tone||'—'}
+✅ ${d.kiraStrat?.cheer||'—'}
+❌ ${(d.kiraStrat?.avoid||[]).slice(0,2).join(', ')||'—'}
 
 🗝️
-${(p.keyFacts||[]).slice(0,5).map(f=>`• ${f}`).join('\n')||'—'}`;
+${(d.keyFacts||[]).slice(0,5).map(f=>`• ${f}`).join('\n')||'—'}`;
 
-  if (admin && (p.mentalNotes||[]).length)
-    r += `\n\n🔴 نفسي:\n${p.mentalNotes.slice(0,4).map(n=>`• ${n}`).join('\n')}`;
+  if (admin && (d.mentalNotes||[]).length)
+    r += `\n\n🔴 نفسي:\n${d.mentalNotes.slice(0,4).map(n=>`• ${n}`).join('\n')}`;
 
   return r;
 };
 
-module.exports.formatShort = p =>
-  `👤 ${p.name} | ${p.mbti||'؟'} | ${p.mood||'—'} | ضغط:${p.stress||0}%`;
+module.exports.formatShort = p => {
+  const d = p.data || p;
+  return `👤 ${d.name} | ${d.mbti||'؟'} | ${d.mood||'—'} | ضغط:${d.stress||0}%`;
+};
