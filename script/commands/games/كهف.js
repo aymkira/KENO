@@ -1,4 +1,4 @@
-const fs   = require("fs-extra");
+const fs    = require("fs-extra");
 const axios = require("axios");
 const path  = require("path");
 
@@ -7,9 +7,16 @@ function getDB() {
   catch { return null; }
 }
 
+function getBotName() {
+  try {
+    const cfg = require(path.join(process.cwd(), "config.json"));
+    return cfg.BOTNAME || "BOT";
+  } catch { return "BOT"; }
+}
+
 module.exports.config = {
     name: "كهف",
-    version: "1.1.0",
+    version: "1.2.0",
     hasPermssion: 0,
     credits: "Ayman",
     description: "العمل في الكهوف للحصول على الأموال",
@@ -32,6 +39,7 @@ module.exports.handleReply = async ({ event, api, handleReply }) => {
     const { threadID, messageID, senderID, body } = event;
     if (handleReply.author != senderID) return;
 
+    const BOT = getBotName();
     const countries = {
         "1": "فيتنام", "2": "الصين", "3": "اليابان",
         "4": "تايلاند", "5": "أمريكا", "6": "كمبوديا"
@@ -39,7 +47,7 @@ module.exports.handleReply = async ({ event, api, handleReply }) => {
 
     if (!(body in countries)) return api.sendMessage("⚠️ اخـتـر رقـم مـن 1 إلـى 6 فـقـط.", threadID, messageID);
 
-    const header = `⌬ ━━━━━━━━━━━━ ⌬`;
+    const header = `⌬ ━━━━━━━━━━━━ ⌬\n      ${BOT} GAMES\n⌬ ━━━━━━━━━━━━ ⌬`;
     const reward = Math.floor(Math.random() * 4501) + 500;
     const country = countries[body];
 
@@ -50,7 +58,7 @@ module.exports.handleReply = async ({ event, api, handleReply }) => {
         await db.addMoney(senderID, reward);
         api.unsendMessage(handleReply.messageID);
         return api.sendMessage(
-            `${header}\n✅ تـم الـعـمـل بـنـجـاح!\n⪼ الـمـكـان: كـهـوف [ ${country} ]\n⪼ الـمـبـلـغ: ${reward}$\n${header}`,
+            `${header}\n✅ تـم الـعـمـل بـنـجـاح!\n⪼ الـمـكـان: كـهـوف [ ${country} ]\n⪼ الـمـبـلـغ: ${reward}$\n⌬ ━━━━━━━━━━━━ ⌬`,
             threadID, messageID
         );
     } catch (e) {
@@ -60,6 +68,7 @@ module.exports.handleReply = async ({ event, api, handleReply }) => {
 
 module.exports.run = async ({ event, api }) => {
     const { threadID, messageID, senderID } = event;
+    const BOT = getBotName();
     const header = `⌬ ━━━━━━━━━━━━ ⌬\n      🕳️ أنـظـمـة الـكـهـوف\n⌬ ━━━━━━━━━━━━ ⌬`;
     const cachePath = __dirname + `/cache/cave.jpg`;
 
