@@ -1,180 +1,131 @@
 // ╔══════════════════════════════════════════════════════════════════╗
-// ║              KIRA DATA SYSTEM v2.0                               ║
-// ║   نظام بيانات موحّد — GitHub JSON — بدون race condition         ║
-// ║                                                                  ║
-// ║   الملفات:                                                       ║
-// ║   user/users.json      ← بيانات المستخدمين الأساسية             ║
-// ║   user/wallet.json     ← المحافظ (عملة، XP، ليفل)              ║
-// ║   user/bans.json       ← سجل الحظر                             ║
-// ║   user/history.json    ← سجل الأحداث                           ║
-// ║   group/threads.json   ← بيانات المجموعات                      ║
-// ║   user/analysis.json   ← تحليل الشخصيات                        ║
-// ║   user/kicked.json     ← المطرودون الدائمون                     ║
+// ║              KIRA DATA SYSTEM v3.0 — MongoDB                    ║
+// ║   نفس API القديم بالكامل — MongoDB backend                      ║
 // ╚══════════════════════════════════════════════════════════════════╝
 
 'use strict';
 
-const https = require('https');
-const fs    = require('fs');
-const path  = require('path');
+const mongoose = require('mongoose');
+const path     = require('path');
 
 // ══════════════════════════════════════════════════
-//  إعدادات — من config.json فقط، لا fallback مكشوف
+//  اتصال MongoDB
 // ══════════════════════════════════════════════════
 function loadConfig() {
   for (const p of [
     path.join(__dirname, '..', 'config.json'),
     path.join(process.cwd(), 'config.json'),
-  ]) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch(_){} }
+  ]) { try { return JSON.parse(require('fs').readFileSync(p, 'utf8')); } catch(_) {} }
   return {};
 }
 
-const CFG   = loadConfig();
-const TOKEN = CFG.GITHUB_TOKEN;
-const REPO  = CFG.GITHUB_DATA_REPO || 'aymkira/data';
+const CFG       = loadConfig();
+const MONGO_URI = CFG.MONGO_URI || "mongodb+srv://kkayman200_db_user:ukhzlLzjRxQgSnTl@cluster0.7nsuoil.mongodb.net/KiraDB?retryWrites=true&w=majority";
 
-if (!TOKEN) {
-  console.error('[DATA] ❌ GITHUB_TOKEN مو موجود في config.json أو Railway Env!');
+let _connected = false;
+async function connect() {
+  if (_connected || mongoose.connection.readyState === 1) return;
+  await mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+  _connected = true;
+  console.log('✅ [DATA] MongoDB connected');
 }
+connect().catch(e => console.error('❌ [DATA] MongoDB error:', e.message));
 
 // ══════════════════════════════════════════════════
-//  كاش + Write Queue (حل Race Condition)
+//  Schemas
 // ══════════════════════════════════════════════════
-const _cache      = {};   // filePath → { data, sha }
-const _saveTimers = {};   // filePath → timeout handle  ← القلب الجديد
-const SAVE_DELAY  = 2500; // ms — بعد آخر تعديل بـ 2.5 ثانية يرفع
+const { Schema } = mongoose;
 
-// ══════════════════════════════════════════════════
-//  GitHub API
-// ══════════════════════════════════════════════════
-function gh(method, endpoint, body = null) {
-  return new Promise((resolve, reject) => {
-    const raw = body ? JSON.stringify(body) : null;
-    const req = https.request({
-      hostname: 'api.github.com',
-      path:     `/repos/${REPO}${endpoint}`,
-      method,
-      headers: {
-        'Authorization': `token ${TOKEN}`,
-        'User-Agent':    'KIRA-DataSystem',
-        'Accept':        'application/vnd.github.v3+json',
-        'Content-Type':  'application/json',
-        ...(raw ? { 'Content-Length': Buffer.byteLength(raw) } : {}),
-      },
-    }, res => {
-      let out = '';
-      res.on('data', c => out += c);
-      res.on('end', () => {
-        try { resolve({ status: res.statusCode, data: JSON.parse(out) }); }
-        catch { resolve({ status: res.statusCode, data: out }); }
-      });
-    });
-    req.on('error', reject);
-    if (raw) req.write(raw);
-    req.end();
-  });
-}
+const userSchema = new Schema({
+  userID:       { type: String, required: true, unique: true },
+  name:         { type: String, default: '' },
+  messageCount: { type: Number, default: 0 },
+  lastSeen:     { type: String, default: null },
+  data:         { type: Object, default: {} },
+  createdAt:    { type: String, default: () => now() },
+  updatedAt:    { type: String, default: () => now() },
+});
 
-function encodePath(p) {
-  return p.split('/').map(s => encodeURIComponent(s)).join('/');
-}
+const walletSchema = new Schema({
+  userID:      { type: String, required: true, unique: true },
+  money:       { type: Number, default: 0 },
+  bank:        { type: Number, default: 0 },
+  exp:         { type: Number, default: 0 },
+  level:       { type: Number, default: 1 },
+  rank:        { type: String, default: 'مبتدئ' },
+  rankEmoji:   { type: String, default: '🔰' },
+  totalEarned: { type: Number, default: 0 },
+  createdAt:   { type: String, default: () => now() },
+  updatedAt:   { type: String, default: () => now() },
+});
 
-// ══════════════════════════════════════════════════
-//  تحميل ملف من GitHub (مع كاش)
-// ══════════════════════════════════════════════════
-async function loadFile(filePath) {
-  if (_cache[filePath]) return _cache[filePath].data;
+const banSchema = new Schema({
+  userID:     { type: String, required: true, unique: true },
+  banned:     { type: Boolean, default: true },
+  reason:     { type: String, default: '' },
+  bannedBy:   { type: String, default: '' },
+  bannedAt:   { type: String, default: () => now() },
+  expiresAt:  { type: String, default: null },
+  unbannedAt: { type: String, default: null },
+  unbannedBy: { type: String, default: '' },
+  history:    { type: Array,  default: [] },
+});
 
-  try {
-    const res = await gh('GET', `/contents/${encodePath(filePath)}`);
-    if (res.status === 200) {
-      const data = JSON.parse(Buffer.from(res.data.content, 'base64').toString('utf8'));
-      _cache[filePath] = { data, sha: res.data.sha };
-      return data;
-    }
-  } catch(_) {}
+const kickSchema = new Schema({
+  userID:   { type: String, required: true, unique: true },
+  reason:   { type: String, default: '' },
+  kickedBy: { type: String, default: '' },
+  kickedAt: { type: String, default: () => now() },
+});
 
-  _cache[filePath] = { data: {}, sha: null };
-  return {};
-}
+const threadSchema = new Schema({
+  threadID:   { type: String, required: true, unique: true },
+  threadName: { type: String, default: '' },
+  banned:     { type: Boolean, default: false },
+  banReason:  { type: String, default: '' },
+  bannedBy:   { type: String, default: '' },
+  bannedAt:   { type: String, default: null },
+  unbannedAt: { type: String, default: null },
+  threadInfo: { type: Object, default: {} },
+  data:       { type: Object, default: {} },
+  createdAt:  { type: String, default: () => now() },
+  updatedAt:  { type: String, default: () => now() },
+});
 
-// ══════════════════════════════════════════════════
-//  رفع ملف لـ GitHub (الرفع الحقيقي)
-// ══════════════════════════════════════════════════
-async function _doSave(filePath) {
-  const entry = _cache[filePath];
-  if (!entry) return false;
+const historySchema = new Schema({
+  key:  { type: String, required: true, unique: true },
+  type: { type: String, default: '' },
+  data: { type: Object, default: {} },
+  at:   { type: String, default: () => now() },
+});
 
-  try {
-    const content = Buffer.from(JSON.stringify(entry.data, null, 2)).toString('base64');
-    const body    = {
-      message: `🤖 auto-save — KIRA`,
-      content,
-      ...(entry.sha ? { sha: entry.sha } : {}),
-    };
-    const res = await gh('PUT', `/contents/${encodePath(filePath)}`, body);
-    if (res.status === 200 || res.status === 201) {
-      entry.sha = res.data?.content?.sha || entry.sha;
-      return true;
-    }
-    // لو فشل بسبب conflict (409) — أعد تحميل الـ sha وحاول مرة ثانية
-    if (res.status === 409 || res.status === 422) {
-      console.warn(`[DATA] ⚠️ conflict في ${filePath} — إعادة sync...`);
-      delete _cache[filePath];
-      await loadFile(filePath);
-      // لا ترفع مرة ثانية تلقائياً — الـ scheduleSave التالي سيعالجها
-    }
-    return false;
-  } catch(e) {
-    console.error(`[DATA] خطأ في حفظ ${filePath}:`, e.message);
-    return false;
-  }
-}
+const analysisSchema = new Schema({
+  userID:    { type: String, required: true, unique: true },
+  data:      { type: Object, default: {} },
+  createdAt: { type: String, default: () => now() },
+  updatedAt: { type: String, default: () => now() },
+});
+
+const customFileSchema = new Schema({
+  filePath: { type: String, required: true, unique: true },
+  data:     { type: Object, default: {} },
+});
 
 // ══════════════════════════════════════════════════
-//  الجدولة — بدل saveFile المباشر
-//  كل التعديلات تمر هنا، يرفع مرة واحدة بعد SAVE_DELAY
+//  Models
 // ══════════════════════════════════════════════════
-function scheduleSave(filePath) {
-  if (_saveTimers[filePath]) clearTimeout(_saveTimers[filePath]);
-  _saveTimers[filePath] = setTimeout(async () => {
-    delete _saveTimers[filePath];
-    await _doSave(filePath);
-  }, SAVE_DELAY);
-}
-
-// حفظ فوري لملف معين (للـ flushAll أو عند إيقاف البوت)
-async function saveFile(filePath) {
-  if (_saveTimers[filePath]) {
-    clearTimeout(_saveTimers[filePath]);
-    delete _saveTimers[filePath];
-  }
-  return await _doSave(filePath);
-}
+const UserM       = mongoose.models.KiraUser       || mongoose.model('KiraUser',       userSchema);
+const WalletM     = mongoose.models.KiraWallet     || mongoose.model('KiraWallet',     walletSchema);
+const BanM        = mongoose.models.KiraBan        || mongoose.model('KiraBan',        banSchema);
+const KickM       = mongoose.models.KiraKick       || mongoose.model('KiraKick',       kickSchema);
+const ThreadM     = mongoose.models.KiraThread     || mongoose.model('KiraThread',     threadSchema);
+const HistoryM    = mongoose.models.KiraHistory    || mongoose.model('KiraHistory',    historySchema);
+const AnalysisM   = mongoose.models.KiraAnalysis   || mongoose.model('KiraAnalysis',   analysisSchema);
+const CustomFileM = mongoose.models.KiraCustomFile || mongoose.model('KiraCustomFile', customFileSchema);
 
 // ══════════════════════════════════════════════════
-//  دوال مساعدة
+//  ثوابت
 // ══════════════════════════════════════════════════
-function now() { return new Date().toISOString(); }
-
-function calcLevel(exp) { return Math.floor(Math.pow(exp / 40, 0.55)) + 1; }
-
-function rankName(level) {
-  if (level >= 100) return { name: 'خالد',       emoji: '😈' };
-  if (level >= 75)  return { name: 'إله',         emoji: '🔥' };
-  if (level >= 50)  return { name: 'إمبراطور',    emoji: '🌟' };
-  if (level >= 40)  return { name: 'ملك',         emoji: '🔱' };
-  if (level >= 30)  return { name: 'أسطورة',      emoji: '⚡' };
-  if (level >= 20)  return { name: 'بطل',         emoji: '👑' };
-  if (level >= 15)  return { name: 'نخبة',        emoji: '💎' };
-  if (level >= 10)  return { name: 'فارس',        emoji: '🛡️' };
-  if (level >= 5)   return { name: 'محارب',       emoji: '⚔️' };
-  return { name: 'مبتدئ', emoji: '🔰' };
-}
-
-// ═══════════════════════════════════════════════════════
-//  ثوابت المسارات
-// ═══════════════════════════════════════════════════════
 const FILES = {
   USERS:    'user/users.json',
   WALLET:   'user/wallet.json',
@@ -185,337 +136,301 @@ const FILES = {
   KICKED:   'user/kicked.json',
 };
 
-// ═══════════════════════════════════════════════════════
-//  ① USERS — بيانات المستخدمين
-// ═══════════════════════════════════════════════════════
+// كاش وهمي — بعض الكود القديم يلمس _cache مباشرة
+const _cache = new Proxy({}, {
+  get(t, k)    { return t[k] ?? { data: {}, sha: null }; },
+  set(t, k, v) { t[k] = v; return true; },
+});
+
+function now() { return new Date().toISOString(); }
+
+function scheduleSave() {}
+async function saveFile()  { return true; }
+async function flushAll()  { return true; }
+async function reload(fp)  { return loadFile(fp); }
+
+// ══════════════════════════════════════════════════
+//  loadFile — توافق مع الكود القديم
+// ══════════════════════════════════════════════════
+async function loadFile(filePath) {
+  await connect();
+  if (filePath === FILES.USERS) {
+    const all = await UserM.find({}).lean();
+    return Object.fromEntries(all.map(u => [u.userID, u]));
+  }
+  if (filePath === FILES.WALLET) {
+    const all = await WalletM.find({}).lean();
+    return Object.fromEntries(all.map(w => [w.userID, w]));
+  }
+  if (filePath === FILES.BANS) {
+    const all = await BanM.find({}).lean();
+    return Object.fromEntries(all.map(b => [b.userID, b]));
+  }
+  if (filePath === FILES.THREADS) {
+    const all = await ThreadM.find({}).lean();
+    return Object.fromEntries(all.map(t => [t.threadID, t]));
+  }
+  if (filePath === FILES.KICKED) {
+    const all = await KickM.find({}).lean();
+    return Object.fromEntries(all.map(k => [k.userID, k]));
+  }
+  if (filePath === FILES.HISTORY) {
+    const all = await HistoryM.find({}).sort({ at: -1 }).limit(500).lean();
+    return Object.fromEntries(all.map(h => [h.key, h]));
+  }
+  if (filePath === FILES.ANALYSIS) {
+    const all = await AnalysisM.find({}).lean();
+    return Object.fromEntries(all.map(a => [a.userID, a]));
+  }
+  const rec = await CustomFileM.findOne({ filePath }).lean();
+  return rec?.data || {};
+}
+
+// ══════════════════════════════════════════════════
+//  USERS
+// ══════════════════════════════════════════════════
+function calcLevel(exp) { return Math.floor(Math.pow(exp / 40, 0.55)) + 1; }
+
+function rankName(level) {
+  if (level >= 100) return { name: 'خالد',    emoji: '😈' };
+  if (level >= 75)  return { name: 'إله',      emoji: '🔥' };
+  if (level >= 50)  return { name: 'إمبراطور', emoji: '🌟' };
+  if (level >= 40)  return { name: 'ملك',      emoji: '🔱' };
+  if (level >= 30)  return { name: 'أسطورة',   emoji: '⚡' };
+  if (level >= 20)  return { name: 'بطل',      emoji: '👑' };
+  if (level >= 15)  return { name: 'نخبة',     emoji: '💎' };
+  if (level >= 10)  return { name: 'فارس',     emoji: '🛡️' };
+  if (level >= 5)   return { name: 'محارب',    emoji: '⚔️' };
+  return                    { name: 'مبتدئ',   emoji: '🔰' };
+}
+
 async function getUser(userID) {
-  const db = await loadFile(FILES.USERS);
-  return db[String(userID)] || null;
+  await connect();
+  return UserM.findOne({ userID: String(userID) }).lean();
 }
 
 async function setUser(userID, data) {
-  const db = await loadFile(FILES.USERS);
+  await connect();
   const id = String(userID);
-  db[id] = { ...(db[id] || { userID: id, createdAt: now() }), ...data, updatedAt: now() };
-  _cache[FILES.USERS].data = db;
-  scheduleSave(FILES.USERS);
-  return db[id];
+  return UserM.findOneAndUpdate(
+    { userID: id },
+    { $set: { ...data, updatedAt: now() }, $setOnInsert: { userID: id, createdAt: now() } },
+    { upsert: true, new: true }
+  ).lean();
 }
 
 async function ensureUser(userID, name = '') {
-  let user = await getUser(userID);
-  if (!user) {
-    await setUser(userID, { name, messageCount: 0 });
-    await ensureWallet(userID);
-    user = await getUser(userID);
-  }
-  return user;
+  await connect();
+  const id = String(userID);
+  await UserM.findOneAndUpdate(
+    { userID: id },
+    { $setOnInsert: { userID: id, name, messageCount: 0, createdAt: now() } },
+    { upsert: true }
+  );
+  await ensureWallet(id);
+  return getUser(id);
 }
 
 async function deleteUser(userID) {
-  const db = await loadFile(FILES.USERS);
-  const id = String(userID);
-  if (!db[id]) return false;
-  delete db[id];
-  _cache[FILES.USERS].data = db;
-  scheduleSave(FILES.USERS);
-  return true;
+  await connect();
+  const r = await UserM.deleteOne({ userID: String(userID) });
+  return r.deletedCount > 0;
 }
 
 async function getAllUsers() {
-  const db = await loadFile(FILES.USERS);
-  return Object.values(db);
+  await connect();
+  return UserM.find({}).lean();
 }
 
 async function incrementMessages(userID, name = '') {
-  await ensureUser(userID, name);
-  const db = await loadFile(FILES.USERS);
+  await connect();
   const id = String(userID);
-  db[id].messageCount = (db[id].messageCount || 0) + 1;
-  db[id].lastSeen     = now();
-  if (name && !db[id].name) db[id].name = name;
-  _cache[FILES.USERS].data = db;
-  scheduleSave(FILES.USERS);
-  // XP تلقائي
-  try { await addExp(userID, 1); } catch(_) {}
-  return db[id];
+  await ensureUser(id, name);
+  await UserM.findOneAndUpdate(
+    { userID: id },
+    { $inc: { messageCount: 1 }, $set: { lastSeen: now(), ...(name ? { name } : {}) } }
+  );
+  try { await addExp(id, 1); } catch(_) {}
+  return getUser(id);
 }
 
-// ═══════════════════════════════════════════════════════
-//  ② WALLET — المحافظ (موحّد مع Currencies القديم)
-// ═══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+//  WALLET
+// ══════════════════════════════════════════════════
 async function ensureWallet(userID) {
-  const db = await loadFile(FILES.WALLET);
+  await connect();
   const id = String(userID);
-  if (!db[id]) {
-    db[id] = {
-      userID: id,
-      money: 0,
-      bank: 0,
-      exp: 0,
-      level: 1,
-      rank: 'مبتدئ',
-      rankEmoji: '🔰',
-      totalEarned: 0,
-      createdAt: now(),
-    };
-    _cache[FILES.WALLET].data = db;
-    scheduleSave(FILES.WALLET);
-  }
-  return db[id];
+  return WalletM.findOneAndUpdate(
+    { userID: id },
+    { $setOnInsert: { userID: id, money: 0, bank: 0, exp: 0, level: 1, rank: 'مبتدئ', rankEmoji: '🔰', totalEarned: 0, createdAt: now() } },
+    { upsert: true, new: true }
+  ).lean();
 }
 
 async function getWallet(userID) {
-  const db = await loadFile(FILES.WALLET);
-  return db[String(userID)] || await ensureWallet(userID);
-}
-
-// ── دالة موحّدة للتعديل على المحفظة — كل عمليات الفلوس تمر هنا
-async function _mutateWallet(userID, mutateFn) {
-  await ensureWallet(userID);
-  const db = await loadFile(FILES.WALLET);
+  await connect();
   const id = String(userID);
-  mutateFn(db[id]);
-  db[id].updatedAt = now();
-  _cache[FILES.WALLET].data = db;
-  scheduleSave(FILES.WALLET);
-  return db[id];
+  return (await WalletM.findOne({ userID: id }).lean()) || ensureWallet(id);
 }
 
 async function addMoney(userID, amount) {
-  amount = Number(amount);
-  return _mutateWallet(userID, w => {
-    w.money       = (w.money || 0) + amount;
-    w.totalEarned = (w.totalEarned || 0) + Math.max(0, amount);
-  });
+  await connect();
+  await ensureWallet(userID);
+  return WalletM.findOneAndUpdate(
+    { userID: String(userID) },
+    { $inc: { money: Number(amount), totalEarned: Math.max(0, Number(amount)) }, $set: { updatedAt: now() } },
+    { new: true }
+  ).lean();
 }
 
 async function removeMoney(userID, amount) {
-  amount = Number(amount);
-  const db = await loadFile(FILES.WALLET);
+  await connect();
   const id = String(userID);
-  await ensureWallet(userID);
-  if ((db[id].money || 0) < amount) return { success: false, balance: db[id].money };
-  await _mutateWallet(userID, w => { w.money -= amount; });
-  return { success: true, balance: db[String(userID)].money };
+  await ensureWallet(id);
+  const w = await WalletM.findOne({ userID: id }).lean();
+  if ((w?.money || 0) < amount) return { success: false, balance: w?.money || 0 };
+  const u = await WalletM.findOneAndUpdate(
+    { userID: id },
+    { $inc: { money: -Number(amount) }, $set: { updatedAt: now() } },
+    { new: true }
+  ).lean();
+  return { success: true, balance: u.money };
 }
 
 async function addBank(userID, amount) {
-  amount = Number(amount);
-  return _mutateWallet(userID, w => { w.bank = (w.bank || 0) + amount; });
+  await connect();
+  await ensureWallet(userID);
+  return WalletM.findOneAndUpdate(
+    { userID: String(userID) },
+    { $inc: { bank: Number(amount) }, $set: { updatedAt: now() } },
+    { new: true }
+  ).lean();
 }
 
 async function removeBank(userID, amount) {
-  amount = Number(amount);
-  const db = await loadFile(FILES.WALLET);
+  await connect();
   const id = String(userID);
-  await ensureWallet(userID);
-  if ((db[id].bank || 0) < amount) return { success: false, balance: db[id].bank };
-  await _mutateWallet(userID, w => { w.bank -= amount; });
-  return { success: true, balance: db[String(userID)].bank };
+  await ensureWallet(id);
+  const w = await WalletM.findOne({ userID: id }).lean();
+  if ((w?.bank || 0) < amount) return { success: false, balance: w?.bank || 0 };
+  const u = await WalletM.findOneAndUpdate(
+    { userID: id },
+    { $inc: { bank: -Number(amount) }, $set: { updatedAt: now() } },
+    { new: true }
+  ).lean();
+  return { success: true, balance: u.bank };
 }
 
 async function addExp(userID, amount = 1) {
-  amount = Number(amount);
-  let levelUp = false, newLevel, rank;
-  await _mutateWallet(userID, w => {
-    const oldLevel = w.level || 1;
-    w.exp          = (w.exp || 0) + amount;
-    newLevel       = calcLevel(w.exp);
-    rank           = rankName(newLevel);
-    w.level        = newLevel;
-    w.rank         = rank.name;
-    w.rankEmoji    = rank.emoji;
-    levelUp        = newLevel > oldLevel;
-  });
-  return { exp: (await getWallet(userID)).exp, level: newLevel, levelUp, rank };
+  await connect();
+  await ensureWallet(userID);
+  const id     = String(userID);
+  const before = await WalletM.findOne({ userID: id }).lean();
+  const newExp = (before?.exp || 0) + Number(amount);
+  const newLvl = calcLevel(newExp);
+  const rank   = rankName(newLvl);
+  const levelUp = newLvl > (before?.level || 1);
+  await WalletM.findOneAndUpdate(
+    { userID: id },
+    { $set: { exp: newExp, level: newLvl, rank: rank.name, rankEmoji: rank.emoji, updatedAt: now() } }
+  );
+  return { exp: newExp, level: newLvl, levelUp, rank };
 }
 
-// توافق مع Currencies القديم (للأوامر اللي استخدمت Currencies.increaseMoney)
-async function increaseMoney(userID, amount) {
-  return addMoney(userID, amount);
-}
+const increaseMoney = (u, a) => addMoney(u, a);
+const decreaseMoney = (u, a) => removeMoney(u, a);
+const getData       = (u)    => getWallet(u);
 
-async function decreaseMoney(userID, amount) {
-  return removeMoney(userID, amount);
-}
-
-// getData — توافق مع Currencies.getData(senderID).money
-async function getData(userID) {
-  return getWallet(userID);
-}
-
-// ═══════════════════════════════════════════════════════
-//  ③ BANS — الحظر
-// ═══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+//  BANS
+// ══════════════════════════════════════════════════
 async function banUser(userID, reason = '', bannedBy = '', duration = 0) {
-  const db = await loadFile(FILES.BANS);
-  const id = String(userID);
+  await connect();
+  const id        = String(userID);
   const expiresAt = duration > 0 ? new Date(Date.now() + duration * 60000).toISOString() : null;
-
-  db[id] = {
-    userID: id, banned: true,
-    reason, bannedBy,
-    bannedAt:  now(),
-    expiresAt,
-    duration,
-    history: [...(db[id]?.history || []), { action: 'ban', reason, by: bannedBy, at: now() }],
-  };
-  _cache[FILES.BANS].data = db;
-  scheduleSave(FILES.BANS);
+  const entry = await BanM.findOneAndUpdate(
+    { userID: id },
+    { $set: { banned: true, reason, bannedBy, bannedAt: now(), expiresAt, unbannedAt: null, unbannedBy: '' },
+      $push: { history: { action: 'ban', reason, by: bannedBy, at: now() } } },
+    { upsert: true, new: true }
+  ).lean();
   global.data?.userBanned?.set(id, { reason, dateAdded: now(), expiresAt });
-  return db[id];
+  return entry;
 }
 
 async function unbanUser(userID, unbannedBy = '') {
-  const db = await loadFile(FILES.BANS);
+  await connect();
   const id = String(userID);
-  if (!db[id]?.banned) return false;
-  db[id].banned     = false;
-  db[id].unbannedAt = now();
-  db[id].unbannedBy = unbannedBy;
-  db[id].history    = [...(db[id].history || []), { action: 'unban', by: unbannedBy, at: now() }];
-  _cache[FILES.BANS].data = db;
-  scheduleSave(FILES.BANS);
+  const b  = await BanM.findOne({ userID: id }).lean();
+  if (!b?.banned) return false;
+  await BanM.findOneAndUpdate(
+    { userID: id },
+    { $set: { banned: false, unbannedAt: now(), unbannedBy },
+      $push: { history: { action: 'unban', by: unbannedBy, at: now() } } }
+  );
   global.data?.userBanned?.delete(id);
   return true;
 }
 
 async function getBan(userID) {
-  const db = await loadFile(FILES.BANS);
-  return db[String(userID)] || null;
+  await connect();
+  return BanM.findOne({ userID: String(userID) }).lean();
 }
 
 async function getAllBans() {
-  const db = await loadFile(FILES.BANS);
-  return Object.values(db).filter(u => u.banned);
+  await connect();
+  return BanM.find({ banned: true }).lean();
 }
 
-// ═══════════════════════════════════════════════════════
-//  ④ KICKED — المطرودون الدائمون
-// ═══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+//  KICKED
+// ══════════════════════════════════════════════════
 async function kickUser(userID, reason = '', kickedBy = '') {
-  const db = await loadFile(FILES.KICKED);
+  await connect();
   const id = String(userID);
-  db[id] = { userID: id, reason, kickedBy: String(kickedBy), kickedAt: now() };
-  _cache[FILES.KICKED].data = db;
-  scheduleSave(FILES.KICKED);
+  const entry = await KickM.findOneAndUpdate(
+    { userID: id },
+    { $set: { reason, kickedBy: String(kickedBy), kickedAt: now() } },
+    { upsert: true, new: true }
+  ).lean();
   if (!global._kickedUsers) global._kickedUsers = new Map();
-  global._kickedUsers.set(id, db[id]);
-  return db[id];
+  global._kickedUsers.set(id, entry);
+  return entry;
 }
 
 async function unkickUser(userID) {
-  const db = await loadFile(FILES.KICKED);
-  const id = String(userID);
-  if (!db[id]) return false;
-  delete db[id];
-  _cache[FILES.KICKED].data = db;
-  scheduleSave(FILES.KICKED);
-  global._kickedUsers?.delete(id);
-  return true;
+  await connect();
+  const r = await KickM.deleteOne({ userID: String(userID) });
+  global._kickedUsers?.delete(String(userID));
+  return r.deletedCount > 0;
 }
 
 async function getKick(userID) {
-  const db = await loadFile(FILES.KICKED);
-  return db[String(userID)] || null;
+  await connect();
+  return KickM.findOne({ userID: String(userID) }).lean();
 }
 
 async function getAllKicked() {
-  const db = await loadFile(FILES.KICKED);
-  return Object.values(db);
+  await connect();
+  return KickM.find({}).lean();
 }
 
-// تحميل المطرودين عند البدء
-;(async () => {
-  try {
-    if (!global._kickedUsers) global._kickedUsers = new Map();
-    const db = await loadFile(FILES.KICKED);
-    for (const [id, data] of Object.entries(db))
-      global._kickedUsers.set(id, data);
-    if (Object.keys(db).length)
-      console.log(`[DATA] 🚫 تم تحميل ${Object.keys(db).length} مطرود للذاكرة`);
-  } catch(_) {}
-})();
-
-// تحميل المحظورين (users) عند البدء
-;(async () => {
-  try {
-    if (!global.data) global.data = {};
-    if (!global.data.userBanned) global.data.userBanned = new Map();
-    const db = await loadFile(FILES.BANS);
-    let count = 0;
-    const now_ = Date.now();
-    for (const [id, entry] of Object.entries(db)) {
-      if (!entry.banned) continue;
-      // تجاهل الحظر المنتهي
-      if (entry.expiresAt && new Date(entry.expiresAt).getTime() <= now_) continue;
-      global.data.userBanned.set(id, {
-        reason:    entry.reason    || '',
-        dateAdded: entry.bannedAt  || '',
-        expiresAt: entry.expiresAt || null,
-      });
-      count++;
-    }
-    if (count) console.log(`[DATA] 🔴 تم تحميل ${count} محظور للذاكرة`);
-  } catch(_) {}
-})();
-
-// تحميل المجموعات المحظورة عند البدء
-;(async () => {
-  try {
-    if (!global.data) global.data = {};
-    if (!global.data.threadBanned) global.data.threadBanned = new Map();
-    const db = await loadFile(FILES.THREADS);
-    let count = 0;
-    for (const [id, entry] of Object.entries(db)) {
-      if (!entry.banned) continue;
-      global.data.threadBanned.set(id, {
-        reason:    entry.banReason || entry.reason || '',
-        dateAdded: entry.bannedAt  || '',
-      });
-      count++;
-    }
-    if (count) console.log(`[DATA] 🔴 تم تحميل ${count} مجموعة محظورة للذاكرة`);
-  } catch(_) {}
-})();
-
-// ═══════════════════════════════════════════════════════
-//  ⑤ HISTORY — سجل الأحداث
-// ═══════════════════════════════════════════════════════
-async function logEvent(type, data) {
-  const db  = await loadFile(FILES.HISTORY);
-  const key = `${Date.now()}_${type}`;
-  db[key]   = { type, ...data, at: now() };
-  // احتفظ بآخر 500 فقط
-  const keys = Object.keys(db).sort();
-  if (keys.length > 500)
-    for (const k of keys.slice(0, keys.length - 500)) delete db[k];
-  _cache[FILES.HISTORY].data = db;
-  scheduleSave(FILES.HISTORY);
-}
-
-async function getHistory(limit = 20) {
-  const db   = await loadFile(FILES.HISTORY);
-  const keys = Object.keys(db).sort().reverse().slice(0, limit);
-  return keys.map(k => db[k]);
-}
-
-// ═══════════════════════════════════════════════════════
-//  ⑥ THREADS — المجموعات
-// ═══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+//  THREADS
+// ══════════════════════════════════════════════════
 async function getThread(threadID) {
-  const db = await loadFile(FILES.THREADS);
-  return db[String(threadID)] || null;
+  await connect();
+  return ThreadM.findOne({ threadID: String(threadID) }).lean();
 }
 
 async function setThread(threadID, data) {
-  const db = await loadFile(FILES.THREADS);
+  await connect();
   const id = String(threadID);
-  db[id]   = { ...(db[id] || { threadID: id, createdAt: now() }), ...data, updatedAt: now() };
-  _cache[FILES.THREADS].data = db;
-  scheduleSave(FILES.THREADS);
-  return db[id];
+  return ThreadM.findOneAndUpdate(
+    { threadID: id },
+    { $set: { ...data, updatedAt: now() }, $setOnInsert: { threadID: id, createdAt: now() } },
+    { upsert: true, new: true }
+  ).lean();
 }
 
 async function banThread(threadID, reason = '', bannedBy = '') {
@@ -531,142 +446,132 @@ async function unbanThread(threadID) {
 }
 
 async function getAllThreads() {
-  const db = await loadFile(FILES.THREADS);
-  return Object.values(db);
+  await connect();
+  return ThreadM.find({}).lean();
 }
 
-// ═══════════════════════════════════════════════════════
-//  ⑦ ANALYSIS — تحليل الشخصيات
-// ═══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+//  HISTORY
+// ══════════════════════════════════════════════════
+async function logEvent(type, data) {
+  await connect();
+  const key = `${Date.now()}_${type}`;
+  await HistoryM.create({ key, type, data, at: now() }).catch(() => {});
+  const count = await HistoryM.countDocuments();
+  if (count > 500) {
+    const oldest = await HistoryM.find({}).sort({ at: 1 }).limit(count - 500).select('_id');
+    await HistoryM.deleteMany({ _id: { $in: oldest.map(o => o._id) } });
+  }
+}
+
+async function getHistory(limit = 20) {
+  await connect();
+  return HistoryM.find({}).sort({ at: -1 }).limit(limit).lean();
+}
+
+// ══════════════════════════════════════════════════
+//  ANALYSIS
+// ══════════════════════════════════════════════════
 async function getAnalysis(userID) {
-  const db = await loadFile(FILES.ANALYSIS);
-  return db[String(userID)] || null;
+  await connect();
+  return AnalysisM.findOne({ userID: String(userID) }).lean();
 }
 
 async function setAnalysis(userID, data) {
-  const db = await loadFile(FILES.ANALYSIS);
+  await connect();
   const id = String(userID);
-  db[id] = { ...(db[id] || { userID: id, createdAt: now() }), ...data, updatedAt: now() };
-  _cache[FILES.ANALYSIS].data = db;
-  scheduleSave(FILES.ANALYSIS);
-  return db[id];
+  return AnalysisM.findOneAndUpdate(
+    { userID: id },
+    { $set: { data, updatedAt: now() }, $setOnInsert: { userID: id, createdAt: now() } },
+    { upsert: true, new: true }
+  ).lean();
 }
 
 async function getAllAnalysis() {
-  const db = await loadFile(FILES.ANALYSIS);
-  return Object.values(db);
+  await connect();
+  return AnalysisM.find({}).lean();
 }
 
-// ═══════════════════════════════════════════════════════
-//  ⑧ ملفات مخصصة
-// ═══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+//  ملفات مخصصة
+// ══════════════════════════════════════════════════
 async function createCustomFile(filePath, initialData = {}) {
-  if (!filePath.startsWith('user/') && !filePath.startsWith('group/'))
-    filePath = `user/${filePath}`;
-  if (!filePath.endsWith('.json')) filePath += '.json';
-  _cache[filePath] = { data: initialData, sha: null };
-  scheduleSave(filePath);
+  await connect();
+  await CustomFileM.findOneAndUpdate({ filePath }, { $setOnInsert: { filePath, data: initialData } }, { upsert: true });
   return filePath;
 }
 
-async function readCustomFile(filePath) {
-  return await loadFile(filePath);
-}
+async function readCustomFile(filePath) { return loadFile(filePath); }
 
 async function writeCustomFile(filePath, data) {
-  if (!_cache[filePath]) _cache[filePath] = { data: {}, sha: null };
-  _cache[filePath].data = data;
-  scheduleSave(filePath);
+  await connect();
+  await CustomFileM.findOneAndUpdate({ filePath }, { $set: { data } }, { upsert: true });
   return true;
 }
 
-// ═══════════════════════════════════════════════════════
-//  إدارة عامة
-// ═══════════════════════════════════════════════════════
-
-// حفظ كل الملفات المعلقة فوراً (للإيقاف النظيف)
-async function flushAll() {
-  const pending = Object.keys(_saveTimers);
-  if (!pending.length) return true;
-  const results = await Promise.all(pending.map(f => saveFile(f)));
-  return results.every(Boolean);
-}
-
-// إعادة تحميل من GitHub
-async function reload(filePath) {
-  delete _cache[filePath];
-  return await loadFile(filePath);
-}
-
-// إحصائيات
+// ══════════════════════════════════════════════════
+//  إحصائيات
+// ══════════════════════════════════════════════════
 async function stats() {
-  const users   = await loadFile(FILES.USERS);
-  const wallets = await loadFile(FILES.WALLET);
-  const bans    = await loadFile(FILES.BANS);
-  const threads = await loadFile(FILES.THREADS);
-  return {
-    users:       Object.keys(users).length,
-    wallets:     Object.keys(wallets).length,
-    activeBans:  Object.values(bans).filter(b => b.banned).length,
-    threads:     Object.keys(threads).length,
-    pendingSave: Object.keys(_saveTimers).length,
-    cachedFiles: Object.keys(_cache).length,
-  };
+  await connect();
+  const [users, wallets, bans, threads] = await Promise.all([
+    UserM.countDocuments(),
+    WalletM.countDocuments(),
+    BanM.countDocuments({ banned: true }),
+    ThreadM.countDocuments(),
+  ]);
+  return { users, wallets, activeBans: bans, threads, pendingSave: 0, cachedFiles: 0 };
 }
 
 // ══════════════════════════════════════════════════
-//  حفظ تلقائي كل 5 دقائق (خط دفاع ثانٍ)
+//  تحميل الذاكرة عند البدء
 // ══════════════════════════════════════════════════
-setInterval(async () => {
-  const pending = Object.keys(_saveTimers);
-  if (pending.length > 0) {
-    console.log(`[DATA] 💾 flush دوري لـ ${pending.length} ملف...`);
-    await flushAll();
+;(async () => {
+  try {
+    await connect();
+    if (!global.data)                global.data               = {};
+    if (!global.data.userBanned)     global.data.userBanned    = new Map();
+    if (!global.data.threadBanned)   global.data.threadBanned  = new Map();
+    if (!global._kickedUsers)        global._kickedUsers       = new Map();
+
+    const nowMs = Date.now();
+    const [bans, bannedThreads, kicked] = await Promise.all([
+      BanM.find({ banned: true }).lean(),
+      ThreadM.find({ banned: true }).lean(),
+      KickM.find({}).lean(),
+    ]);
+
+    for (const b of bans) {
+      if (b.expiresAt && new Date(b.expiresAt).getTime() <= nowMs) continue;
+      global.data.userBanned.set(b.userID, { reason: b.reason || '', dateAdded: b.bannedAt || '', expiresAt: b.expiresAt || null });
+    }
+    for (const t of bannedThreads) {
+      global.data.threadBanned.set(t.threadID, { reason: t.banReason || '', dateAdded: t.bannedAt || '' });
+    }
+    for (const k of kicked) {
+      global._kickedUsers.set(k.userID, k);
+    }
+    console.log(`[DATA] ✅ loaded: ${bans.length} bans | ${bannedThreads.length} banned threads | ${kicked.length} kicked`);
+  } catch(e) {
+    console.error('[DATA] startup error:', e.message);
   }
-}, 5 * 60 * 1000);
-
-// حفظ نظيف عند إيقاف البوت
-process.on('SIGTERM', async () => { await flushAll(); });
-process.on('SIGINT',  async () => { await flushAll(); });
+})();
 
 // ══════════════════════════════════════════════════
-//  تصدير كل شيء
+//  export — نفس الـ API القديم بالكامل
 // ══════════════════════════════════════════════════
 module.exports = {
-  // ── مستخدمين ──
   getUser, setUser, ensureUser, deleteUser, getAllUsers, incrementMessages,
-
-  // ── محافظ (+ توافق مع Currencies القديم) ──
   getWallet, ensureWallet,
-  addMoney, removeMoney,
-  addBank, removeBank,
-  addExp,
-  increaseMoney,   // ← Currencies.increaseMoney
-  decreaseMoney,   // ← Currencies.decreaseMoney
-  getData,         // ← Currencies.getData
-
-  // ── حظر ──
+  addMoney, removeMoney, addBank, removeBank, addExp,
+  increaseMoney, decreaseMoney, getData,
   banUser, unbanUser, getBan, getAllBans,
-
-  // ── طرد دائم ──
   kickUser, unkickUser, getKick, getAllKicked,
-
-  // ── مجموعات ──
   getThread, setThread, banThread, unbanThread, getAllThreads,
-
-  // ── سجل ──
   logEvent, getHistory,
-
-  // ── تحليل ──
   getAnalysis, setAnalysis, getAllAnalysis,
-
-  // ── ملفات مخصصة ──
   createCustomFile, readCustomFile, writeCustomFile,
-
-  // ── إدارة ──
   flushAll, reload, stats,
   loadFile, saveFile, scheduleSave,
-
-  // ── ثوابت ──
-  FILES,
+  _cache, FILES,
 };
