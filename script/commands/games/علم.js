@@ -1,36 +1,46 @@
-const fs = require('fs-extra');
+const fs    = require('fs-extra');
 const axios = require('axios');
-const path = require("path");
+const path  = require("path");
+
+function getDB() {
+  try { return require(path.join(process.cwd(), "includes", "data.js")); }
+  catch { return null; }
+}
+
+function getBotName() {
+  try {
+    const cfg = require(path.join(process.cwd(), "config.json"));
+    return cfg.BOTNAME || "BOT";
+  } catch { return "BOT"; }
+}
 
 module.exports.config = {
   name: "اعلام",
-  version: "1.2.5",
+  version: "1.3.0",
   hasPermssion: 0,
   credits: "أيمن",
-  description: "تحدي احزر العلم - ستايل صافي",
+  description: "تحدي احزر العلم",
   commandCategory: "games",
   usages: "اعلام",
   cooldowns: 5
 };
 
-const header = `⌬ ━━━━━━━━━━━━ ⌬\n     🚩 تـحـدي الأعلام\n⌬ ━━━━━━━━━━━━ ⌬`;
-
 module.exports.handleReply = async function ({ api, event, handleReply }) {
   const { threadID, messageID, senderID, body } = event;
   if (senderID !== handleReply.author) return;
 
-  const db = require(path.join(process.cwd(), "includes", "data.js"));
-  const userAnswer = body.trim();
+  const BOT = getBotName();
+  const header = `⌬ ━━━━━━━━━━━━ ⌬\n⌬ ━━ ${BOT} GAMES ━━ ⌬\n     🚩 تـحـدي الأعلام\n⌬ ━━━━━━━━━━━━ ⌬`;
+
+  let db; try { db = require(path.join(process.cwd(), "includes", "data.js")); } catch(_) {}
+  const userAnswer    = body.trim();
   const correctAnswer = handleReply.correctAnswer;
 
-  // حذف رسالة السؤال القديمة فوراً
   api.unsendMessage(handleReply.messageID);
 
   if (userAnswer === correctAnswer) {
-      const moneyGain = 50; 
-      await db.addMoney(senderID, moneyGain);
-
-      return api.sendMessage(`${header}\n\n✅ أحسنت! الإجابة صحيحة.\n⪼ الجائزة: ${moneyGain}$`, threadID, (err, info) => {
+      if (db) await db.addMoney(senderID, 50).catch(() => {});
+      return api.sendMessage(`${header}\n\n✅ أحسنت! الإجابة صحيحة.\n⪼ الجائزة: 50$`, threadID, (err, info) => {
           setTimeout(() => api.unsendMessage(info.messageID), 5000);
       }, messageID);
   } else {
@@ -42,9 +52,11 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
 
 module.exports.run = async function ({ api, event }) {
   const { threadID, messageID, senderID } = event;
+  const BOT = getBotName();
+  const header = `⌬ ━━━━━━━━━━━━ ⌬\n⌬ ━━ ${BOT} GAMES ━━ ⌬\n     🚩 تـحـدي الأعلام\n⌬ ━━━━━━━━━━━━ ⌬`;
+
   const cacheDir = path.join(__dirname, "cache");
   if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
-  
   const tempPath = path.join(cacheDir, `flag_${senderID}_${Date.now()}.jpg`);
 
   const questions = [
@@ -71,10 +83,10 @@ module.exports.run = async function ({ api, event }) {
       { image: "https://i.pinimg.com/236x/17/cc/ec/17ccecec86eb5fe2d0c75c7c85bc7b5d.jpg", answer: "السويد" }
   ];
 
-  const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
+  const q = questions[Math.floor(Math.random() * questions.length)];
 
   try {
-      const response = await axios.get(randomQuestion.image, { responseType: "arraybuffer" });
+      const response = await axios.get(q.image, { responseType: "arraybuffer" });
       fs.writeFileSync(tempPath, Buffer.from(response.data));
 
       return api.sendMessage({
@@ -83,13 +95,13 @@ module.exports.run = async function ({ api, event }) {
       }, threadID, (err, info) => {
           if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
           global.client.handleReply.push({
-              name: this.config.name,
+              name: module.exports.config.name,
               messageID: info.messageID,
               author: senderID,
-              correctAnswer: randomQuestion.answer
+              correctAnswer: q.answer
           });
       }, messageID);
-  } catch (error) {
+  } catch (e) {
       return api.sendMessage("⪼ حـدث خـطأ فـي جـلـب الـصورة.", threadID, messageID);
   }
 };
