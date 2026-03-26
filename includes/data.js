@@ -438,6 +438,48 @@ async function getAllKicked() {
   } catch(_) {}
 })();
 
+// تحميل المحظورين (users) عند البدء
+;(async () => {
+  try {
+    if (!global.data) global.data = {};
+    if (!global.data.userBanned) global.data.userBanned = new Map();
+    const db = await loadFile(FILES.BANS);
+    let count = 0;
+    const now_ = Date.now();
+    for (const [id, entry] of Object.entries(db)) {
+      if (!entry.banned) continue;
+      // تجاهل الحظر المنتهي
+      if (entry.expiresAt && new Date(entry.expiresAt).getTime() <= now_) continue;
+      global.data.userBanned.set(id, {
+        reason:    entry.reason    || '',
+        dateAdded: entry.bannedAt  || '',
+        expiresAt: entry.expiresAt || null,
+      });
+      count++;
+    }
+    if (count) console.log(`[DATA] 🔴 تم تحميل ${count} محظور للذاكرة`);
+  } catch(_) {}
+})();
+
+// تحميل المجموعات المحظورة عند البدء
+;(async () => {
+  try {
+    if (!global.data) global.data = {};
+    if (!global.data.threadBanned) global.data.threadBanned = new Map();
+    const db = await loadFile(FILES.THREADS);
+    let count = 0;
+    for (const [id, entry] of Object.entries(db)) {
+      if (!entry.banned) continue;
+      global.data.threadBanned.set(id, {
+        reason:    entry.banReason || entry.reason || '',
+        dateAdded: entry.bannedAt  || '',
+      });
+      count++;
+    }
+    if (count) console.log(`[DATA] 🔴 تم تحميل ${count} مجموعة محظورة للذاكرة`);
+  } catch(_) {}
+})();
+
 // ═══════════════════════════════════════════════════════
 //  ⑤ HISTORY — سجل الأحداث
 // ═══════════════════════════════════════════════════════
