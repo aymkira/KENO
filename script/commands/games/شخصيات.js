@@ -1,9 +1,10 @@
 const fs = require('fs-extra');
 const axios = require('axios');
+const path = require('path');
 
 module.exports.config = {
   name: "شخصيات",
-  version: "1.0.0",
+  version: "2.0.0",
   hasPermssion: 0,
   credits: "ايمن",
   description: "احزر اسم الشخصيه من الصوره",
@@ -12,25 +13,36 @@ module.exports.config = {
   cooldowns: 5
 };
 
-module.exports.handleReply = async function({ api, event, handleReply, Users, Threads, Currencies, models }) {
+module.exports.handleReply = async function({ api, event, handleReply, Users }) {
   const { body, threadID, messageID, senderID } = event;
-  const { correctAnswer, path } = handleReply;
+  const { correctAnswer, filePath } = handleReply;
 
   const userAnswer = body.trim().toLowerCase();
   const userName = await Users.getNameUser(senderID);
 
   if (userAnswer === correctAnswer.toLowerCase()) {
-    await Currencies.increaseMoney(senderID, 50);
-    api.sendMessage(`⌬ ━━ 𝗞𝗜𝗥𝗔 GAMES ━━ ⌬\n\nتهانينا ${userName} لقد عرفت الشخصية وحصلت على 50 دولار`, threadID, messageID);
+    // ربط بنظام data.js الجديد
+    try {
+      const db = require(path.join(process.cwd(), 'includes', 'data.js'));
+      await db.addMoney(senderID, 50);
+    } catch(_) {}
+
+    api.sendMessage(
+      `⌬ ━━ 𝗞𝗜𝗥𝗔 GAMES ━━ ⌬\n\nتهانينا ${userName} لقد عرفت الشخصية وحصلت على 50 دولار 🎉`,
+      threadID, messageID
+    );
     api.unsendMessage(handleReply.messageID);
   } else {
-    api.sendMessage(`⌬ ━━ 𝗞𝗜𝗥𝗔 GAMES ━━ ⌬\n\nخطأ، حاول مرة أخرى`, threadID, messageID);
+    api.sendMessage(
+      `⌬ ━━ 𝗞𝗜𝗥𝗔 GAMES ━━ ⌬\n\nخطأ، حاول مرة أخرى ❌`,
+      threadID, messageID
+    );
   }
 
-  if (fs.existsSync(path)) fs.unlinkSync(path);
+  try { if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(_) {}
 };
 
-module.exports.run = async function({ api, event, args, Users, Threads, Currencies, models }) {
+module.exports.run = async function({ api, event }) {
   const { threadID, messageID, senderID } = event;
 
   const questions = [
@@ -60,20 +72,31 @@ module.exports.run = async function({ api, event, args, Users, Threads, Currenci
   ];
 
   const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
-  const path = __dirname + `/cache/char_${senderID}.jpg`;
 
-  const imageResponse = await axios.get(randomQuestion.image, { responseType: "arraybuffer" });
-  fs.writeFileSync(path, Buffer.from(imageResponse.data, "binary"));
+  // المسار الصحيح لمجلد cache
+  const cacheDir = path.join(process.cwd(), 'script', 'commands', 'cache');
+  if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+  const filePath = path.join(cacheDir, `char_${senderID}.jpg`);
 
-  return api.sendMessage({ 
-    body: `⌬ ━━ 𝗞𝗜𝗥𝗔 GAMES ━━ ⌬\n\nما اسم هذه الشخصية ؟`, 
-    attachment: fs.createReadStream(path) 
+  try {
+    const imageResponse = await axios.get(randomQuestion.image, { responseType: "arraybuffer", timeout: 10000 });
+    fs.writeFileSync(filePath, Buffer.from(imageResponse.data, "binary"));
+  } catch(e) {
+    return api.sendMessage(`⌬ ━━ 𝗞𝗜𝗥𝗔 GAMES ━━ ⌬\n\n❌ فشل تحميل الصورة، حاول مرة ثانية`, threadID, messageID);
+  }
+
+  const cmdName = module.exports.config.name; // ✅ بدل this.config.name
+
+  return api.sendMessage({
+    body: `⌬ ━━ 𝗞𝗜𝗥𝗔 GAMES ━━ ⌬\n\nما اسم هذه الشخصية ؟ 🎭`,
+    attachment: fs.createReadStream(filePath)
   }, threadID, (error, info) => {
+    if (error || !info) return;
     global.client.handleReply.push({
-      name: this.config.name,
+      name: cmdName,
       messageID: info.messageID,
       correctAnswer: randomQuestion.answer,
-      path: path
+      filePath // ✅ اسم صحيح متوافق مع handleReply
     });
   }, messageID);
 };
