@@ -286,7 +286,18 @@ function onBot() {
                     const e = new Error(`Rate limit: thread ${threadID}`);
                     if (typeof callback==="function") callback(e); return;
                 }
-                return _origSend(msg, threadID, callback, messageID);
+                // Typing indicator قبل الإرسال
+                try {
+                    const stopTyping = api.sendTypingIndicator(threadID, () => {});
+                    const textLen = typeof msg === "string" ? msg.length : (msg?.body?.length || 0);
+                    const delay = Math.min(600 + textLen * 25, 3500);
+                    setTimeout(() => {
+                        try { if (typeof stopTyping === "function") stopTyping(); } catch(_) {}
+                        _origSend(msg, threadID, callback, messageID);
+                    }, delay);
+                } catch(_) {
+                    _origSend(msg, threadID, callback, messageID);
+                }
             };
 
             (function loadCommands() {
@@ -390,7 +401,20 @@ function onBot() {
                 return listener(message);
             }
 
-            global.handleListen = api.listenMqtt(listenerCallback);
+            // منع الرد مرتين على نفس الرسالة
+            const _processedMsgIDs = new Set();
+            function listenerCallback_deduped(error, message) {
+                if (!error && message?.messageID) {
+                    if (_processedMsgIDs.has(message.messageID)) return;
+                    _processedMsgIDs.add(message.messageID);
+                    if (_processedMsgIDs.size > 500) {
+                        const first = _processedMsgIDs.values().next().value;
+                        _processedMsgIDs.delete(first);
+                    }
+                }
+                return listenerCallback(error, message);
+            }
+            global.handleListen = api.listenMqtt(listenerCallback_deduped);
 
             _saveInterval = setInterval(() => {
                 try {
