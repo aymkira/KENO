@@ -290,7 +290,7 @@ function onBot() {
                 try {
                     const stopTyping = api.sendTypingIndicator(threadID, () => {});
                     const textLen = typeof msg === "string" ? msg.length : (msg?.body?.length || 0);
-                    const delay = Math.min(600 + textLen * 25, 3500);
+                    const delay = Math.min(300 + textLen * 12, 2000);
                     setTimeout(() => {
                         try { if (typeof stopTyping === "function") stopTyping(); } catch(_) {}
                         _origSend(msg, threadID, callback, messageID);
