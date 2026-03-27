@@ -17,7 +17,7 @@ const { readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync, unlinkS
 const { join, resolve } = require("path");
 const { execSync } = require("child_process");
 const logger = require("./utils/log.js");
-const login  = require("ayman-fca");
+const login  = require("@dongdev/fca-unofficial");
 const https  = require("https");
 
 const { createSessionKeeper } = require("ayman-fca/src/utils/sessionKeeper");
