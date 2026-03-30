@@ -17,11 +17,12 @@ function getDB() {
 
 const CFG      = loadConfig();
 const BOT_NAME = CFG.BOTNAME || "BOT";
+const DEV_ID   = String(CFG.DEVELOPER_ID || CFG.developerID || CFG.ownerID || "");
 
 module.exports.config = {
   name:      "تحكم_الجروب",
   eventType: ["log:subscribe", "log:unsubscribe"],
-  version:   "7.0.0",
+  version:   "8.0.0",
   credits:   "ayman",
   description: `${BOT_NAME} — ترحيب ووداع بـ GIF مع تسجيل سحابي`,
 };
@@ -56,7 +57,7 @@ module.exports.run = async ({ api, event, Users, Threads }) => {
     for (const user of addedIDs) {
       const userID = String(user.userFbId);
       if (!userID || userID === botID) continue;
-      if (global._kickedUsers?.has(userID))   continue;
+      if (global._kickedUsers?.has(userID))    continue;
       if (global.data?.userBanned?.has(userID)) continue;
 
       // ── تحقق من السحابة: هل سبق وانضم لنفس الكروب؟ ─────────
@@ -87,7 +88,6 @@ module.exports.run = async ({ api, event, Users, Threads }) => {
         try {
           await db.ensureUser(userID, name);
 
-          // سجّل الانضمام في الأنالسيس كمفتاح خاص للكروب
           await db.setAnalysis(`join_${threadID}_${userID}`, {
             userID,
             name,
@@ -112,7 +112,8 @@ module.exports.run = async ({ api, event, Users, Threads }) => {
   // 🚪 مغادرة
   // ════════════════════════════════════════════════════════════
   if (logType === "log:unsubscribe") {
-    const leftID = String(logData?.leftParticipantFbId || "");
+    const leftID  = String(logData?.leftParticipantFbId || "");
+    const actorID = String(logData?.actorFbId || logData?.actor || "");
     if (!leftID || leftID === botID) return;
     if (global._kickedUsers?.has(leftID))    return;
     if (global.data?.userBanned?.has(leftID)) return;
@@ -122,26 +123,55 @@ module.exports.run = async ({ api, event, Users, Threads }) => {
       try { name = await Users.getNameUser(leftID); } catch(_) { name = "شخص ما"; }
     }
 
-    const msgs = [
-      `${name} راح 🚶‍♂️.. والله ما نشتاقلك 😂`,
-      `باي باي يا ${name} 👋 ما راح يفرق معنا فراقك 💅`,
-      `${name} طلع وكأنه ما كان موجود أصلاً 😴`,
-      `وداعاً يا ${name}.. الجروب ما حس بفرق 🙃`,
-      `${name} مشى.. الهواء صاف الحين 😌✨`,
-    ];
+    // ── المطور خرج → البوت يتبعه ─────────────────────────────
+    if (DEV_ID && leftID === DEV_ID) {
+      try {
+        api.sendMessage(`😔 المطور غادر.. أنا ماراح أبقى بدونه\nباي ${groupName} 🖤`, threadID, () => {
+          api.removeUserFromGroup(botID, threadID);
+        });
+      } catch(_) {
+        api.removeUserFromGroup(botID, threadID);
+      }
+      return;
+    }
 
-    await sendWithGif(
-      api, threadID,
-      msgs[Math.floor(Math.random() * msgs.length)],
-      "https://media.giphy.com/media/KRxcgvd5fLiWk/giphy.gif",
-      `bye_${leftID}`
-    );
+    // هل طلع لوحده أم انطرد من ادمن؟
+    const leftByHimself = !actorID || actorID === leftID;
+
+    if (leftByHimself) {
+      // ── طلع لوحده → رجّعه غصبا ────────────────────────────
+      try {
+        await new Promise((res, rej) =>
+          api.addUserToGroup(leftID, threadID, e => e ? rej(e) : res())
+        );
+        api.sendMessage(`🔒 ${name} حاول يطلع بس ما خلّيناه 😈`, threadID);
+      } catch(_) {
+        api.sendMessage(`⚠️ حاولت أرجّع ${name} بس ما قدرت.`, threadID);
+      }
+    } else {
+      // ── انطرد من ادمن → وداع + GIF فقط ──────────────────
+      const msgs = [
+        `${name} راح 🚶‍♂️.. والله ما نشتاقلك 😂`,
+        `باي باي يا ${name} 👋 ما راح يفرق معنا فراقك 💅`,
+        `${name} طلع وكأنه ما كان موجود أصلاً 😴`,
+        `وداعاً يا ${name}.. الجروب ما حس بفرق 🙃`,
+        `${name} مشى.. الهواء صاف الحين 😌✨`,
+      ];
+
+      await sendWithGif(
+        api, threadID,
+        msgs[Math.floor(Math.random() * msgs.length)],
+        "https://media.giphy.com/media/KRxcgvd5fLiWk/giphy.gif",
+        `bye_${leftID}`
+      );
+    }
 
     // سجّل المغادرة في السحابة
     if (db) {
       try {
         await db.logEvent('member_leave', {
           userID: leftID, name, threadID, groupName,
+          kicked: !leftByHimself,
           at: new Date().toISOString(),
         });
       } catch(_) {}
