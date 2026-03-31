@@ -17,8 +17,7 @@ function getDB() {
 
 const CFG      = loadConfig();
 const BOT_NAME = CFG.BOTNAME || "BOT";
-const DEV_ID   = String(CFG.DEVELOPER_ID || CFG.developerID || CFG.ownerID || "");
-
+const DEV_ID = String(CFG.ADMINBOT || "");
 module.exports.config = {
   name:      "تحكم_الجروب",
   eventType: ["log:subscribe", "log:unsubscribe"],
