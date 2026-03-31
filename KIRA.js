@@ -286,18 +286,7 @@ function onBot() {
                     const e = new Error(`Rate limit: thread ${threadID}`);
                     if (typeof callback==="function") callback(e); return;
                 }
-                // Typing indicator قبل الإرسال
-                try {
-                    const stopTyping = api.sendTypingIndicator(threadID, () => {});
-                    const textLen = typeof msg === "string" ? msg.length : (msg?.body?.length || 0);
-                    const delay = Math.min(300 + textLen * 12, 2000);
-                    setTimeout(() => {
-                        try { if (typeof stopTyping === "function") stopTyping(); } catch(_) {}
-                        _origSend(msg, threadID, callback, messageID);
-                    }, delay);
-                } catch(_) {
-                    _origSend(msg, threadID, callback, messageID);
-                }
+                return _origSend(msg, threadID, callback, messageID);
             };
 
             (function loadCommands() {
