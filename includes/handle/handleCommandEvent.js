@@ -17,9 +17,19 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
             (allowInbox == false && senderID === threadID)
         ) return;
 
+        const isNormalMsg = event.type === 'message' || event.type === 'message_reply';
+
         for (const eventReg of eventRegistered) {
             const cmd = commands.get(eventReg);
             if (!cmd || typeof cmd.handleEvent !== 'function') continue;
+
+            // منع التنفيذ المزدوج: إذا كانت رسالة عادية والأمر عنده run()
+            // والـ handleEvent تبعه يتعامل مع reactions فقط — تخطى
+            if (isNormalMsg && typeof cmd.run === 'function') {
+                const src = cmd.handleEvent.toString();
+                const isReactionOnly = src.includes('reaction') && !src.includes('event.body');
+                if (isReactionOnly) continue;
+            }
 
             // getText للغة
             let getText2 = () => '';
