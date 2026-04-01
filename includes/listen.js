@@ -145,10 +145,13 @@ module.exports = function({ api, models }) {
     switch (event.type) {
       case "message":
       case "message_reply":
-      case "message_unsend":
         handleCreateDatabase({ event });
         handleCommand({ event });
         handleReply({ event });
+        // handleCommandEvent هنا فقط لأوامر تحتاج تستمع للرسائل بدون prefix (مثل تحميل روابط تلقائي)
+        handleCommandEvent({ event });
+        break;
+      case "message_unsend":
         handleEvent({ event });
         break;
       case "event":
