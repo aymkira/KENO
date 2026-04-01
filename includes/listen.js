@@ -149,7 +149,6 @@ module.exports = function({ api, models }) {
         handleCreateDatabase({ event });
         handleCommand({ event });
         handleReply({ event });
-        handleCommandEvent({ event });
         handleEvent({ event });
         break;
       case "event":
